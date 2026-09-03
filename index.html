@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rubric Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Competency validation</p>
+          <h1>Build a rubric that fits the product.</h1>
+          <p class="lede">Add the topics that matter, define what good looks like, and keep the scoring math honest.</p>
+        </div>
+        <div class="actions">
+          <button class="button secondary" id="reset-button">Reset sample</button>
+          <button class="button" id="export-button">Export Excel</button>
+        </div>
+      </header>
+
+      <section class="setup-card">
+        <label>
+          <span>Product / rubric name</span>
+          <input id="rubric-name" type="text" placeholder="e.g. Console demo validation" />
+        </label>
+        <label>
+          <span>Value-tied topics required</span>
+          <input id="value-gate" type="number" min="0" step="1" />
+        </label>
+        <div class="weight-status" id="weight-status" aria-live="polite"></div>
+      </section>
+
+      <section class="workspace">
+        <div class="builder-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Rubric structure</p>
+              <h2>Topics &amp; evidence</h2>
+            </div>
+            <button class="button compact" id="add-topic-button">+ Add topic</button>
+          </div>
+          <div id="topics" class="topics"></div>
+        </div>
+        <aside class="builder-summary">
+          <p class="eyebrow">Rubric health</p>
+          <h2>Weight check</h2>
+          <div class="weight-orb"><span id="side-weight-total">0</span><small>%</small></div>
+          <p class="weight-message" id="side-weight-message">Add topic weights until the total reaches 100%.</p>
+          <dl class="builder-stats">
+            <div><dt>Topics</dt><dd id="topic-count">0</dd></div>
+            <div><dt>Evidence items</dt><dd id="subtopic-count">0</dd></div>
+            <div><dt>Value gate</dt><dd id="side-value-gate">0 topics</dd></div>
+          </dl>
+        </aside>
+      </section>
+    </main>
+    <template id="topic-template">
+      <article class="topic-card" draggable="false">
+        <div class="topic-header">
+          <div class="topic-ident"><button class="drag-handle" type="button" aria-label="Drag to reorder topic" title="Drag to reorder">::</button><span class="topic-number"></span><input class="topic-name" type="text" aria-label="Topic name" /></div>
+          <div class="topic-controls">
+            <label class="weight-input"><span>Weight</span><input class="topic-weight" type="number" min="0" max="100" step="1" /><em>%</em></label>
+            <button class="icon-button delete-topic" aria-label="Remove topic">×</button>
+          </div>
+        </div>
+        <div class="subtopic-list"></div>
+        <button class="add-subtopic">+ Add evidence item</button>
+      </article>
+    </template>
+    <template id="subtopic-template">
+      <div class="subtopic-row">
+        <span class="drag-mark">+</span>
+        <input class="subtopic-name" type="text" aria-label="Evidence item" />
+        <button class="icon-button delete-subtopic" aria-label="Remove evidence item">×</button>
+      </div>
+    </template>
+    <script src="app.js"></script>
+  </body>
+</html>
