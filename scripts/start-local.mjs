@@ -22,8 +22,7 @@ function run(command, args, options = {}) {
 
 async function hasDependencies() {
   try {
-    await import("jszip");
-    await import("@oai/artifact-tool");
+    await import("exceljs");
     return true;
   } catch {
     return false;
@@ -75,8 +74,7 @@ if (!(await hasDependencies())) {
   if (install.status !== 0 || !(await hasDependencies())) {
     log("");
     log("Dependency install did not finish successfully.");
-    log("If this failed on @oai/artifact-tool, that package may not be available outside the Codex runtime yet.");
-    log("In that case, this app needs either a public Excel export dependency or a bundled desktop build before non-Codex users can run it.");
+    log("Check your internet connection, then try this starter again.");
     process.exit(1);
   }
 }

@@ -1,10 +1,8 @@
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import JSZip from "jszip";
-import { FileBlob, SpreadsheetFile, Workbook } from "@oai/artifact-tool";
+import ExcelJS from "exceljs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = 4173;
@@ -970,6 +968,382 @@ async function createExactTemplateWorkbook(rubric) {
   return workbook;
 }
 
+const thinGray = { style: "thin", color: { argb: "FFB7B7B7" } };
+const darkGray = { style: "thin", color: { argb: "FF666666" } };
+
+function colorFill(hex) {
+  return { type: "pattern", pattern: "solid", fgColor: { argb: `FF${hex.replace("#", "")}` } };
+}
+
+function font(color = "000000", options = {}) {
+  return { name: "Calibri", size: 9.5, color: { argb: `FF${color.replace("#", "")}` }, ...options };
+}
+
+function colNumber(letters) {
+  return letters.split("").reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+}
+
+function rangeBounds(address) {
+  const [start, end = start] = address.split(":");
+  const [, startCol, startRow] = start.match(/^([A-Z]+)(\d+)$/);
+  const [, endCol, endRow] = end.match(/^([A-Z]+)(\d+)$/);
+  return {
+    startCol: colNumber(startCol),
+    endCol: colNumber(endCol),
+    startRow: Number(startRow),
+    endRow: Number(endRow),
+  };
+}
+
+function eachCell(ws, address, callback) {
+  const bounds = rangeBounds(address);
+  for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+    for (let col = bounds.startCol; col <= bounds.endCol; col += 1) callback(ws.getCell(row, col), row, col);
+  }
+}
+
+function styleRange(ws, address, style) {
+  eachCell(ws, address, (cell) => {
+    if (style.font) cell.font = style.font;
+    if (style.fill) cell.fill = style.fill;
+    if (style.alignment) cell.alignment = style.alignment;
+    if (style.border) cell.border = style.border;
+    if (style.numFmt) cell.numFmt = style.numFmt;
+  });
+}
+
+function borderRange(ws, address, border = thinGray) {
+  styleRange(ws, address, { border: { top: border, left: border, bottom: border, right: border } });
+}
+
+function sectionHeader(ws, address, text) {
+  ws.mergeCells(address);
+  const cell = ws.getCell(address.split(":")[0]);
+  cell.value = text;
+  styleRange(ws, address, {
+    fill: colorFill("#000000"),
+    font: font("#FFFFFF", { bold: true, size: 11 }),
+    alignment: { vertical: "middle" },
+    border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray },
+  });
+}
+
+function listFormula(listSheet, name, values) {
+  const column = listSheet.actualColumnCount + 1;
+  values.forEach((value, index) => {
+    listSheet.getCell(index + 1, column).value = value;
+  });
+  const col = listSheet.getColumn(column).letter;
+  return `'${listSheet.name}'!$${col}$1:$${col}$${values.length}`;
+}
+
+function addValidation(cell, formula) {
+  cell.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [formula],
+    showErrorMessage: true,
+    errorTitle: "Invalid choice",
+    error: "Pick a value from the dropdown.",
+  };
+}
+
+function writePublicHeader(ws, rubric, config, track) {
+  const productName = productNameForExport(rubric, config);
+  const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
+    ? productName
+    : `${productName || "[Product]"} - ${config.title}`;
+
+  ws.mergeCells("A1:E1");
+  ws.mergeCells("A2:E2");
+  ws.getCell("A1").value = title;
+  ws.getCell("A2").value = config.subtitle;
+  ws.getCell("A1").font = font("#000000", { bold: true, size: 16 });
+  ws.getCell("A2").font = font("#666666", { italic: true, size: 9.5 });
+
+  const isPoc = track === "poc";
+  ws.getCell("A4").value = "Date";
+  ws.getCell("C4").value = isPoc ? "Presenter (SE)" : "Presenter";
+  ws.getCell("A5").value = "Product";
+  ws.getCell("C5").value = isPoc ? "Evaluator (SE)" : "Evaluator";
+  ws.getCell("B5").value = productName || "[Product name]";
+  if (isPoc) {
+    ws.getCell("A6").value = "POC Scenario / Customer Context";
+    ws.mergeCells("B6:E6");
+    ws.mergeCells("A7:E7");
+    ws.getCell("A7").value = "Optional. Fill in only if the session was framed around a specific customer situation; leave blank for a generic run.";
+    ws.getCell("A7").font = font("#666666", { italic: true });
+  }
+
+  ["A4", "C4", "A5", "C5", ...(isPoc ? ["A6"] : [])].forEach((address) => {
+    const cell = ws.getCell(address);
+    cell.fill = colorFill(formLabelFill);
+    cell.font = font("#000000", { bold: true, size: 10 });
+    cell.border = { top: darkGray, left: darkGray, bottom: darkGray, right: darkGray };
+  });
+  ["B4", "D4:E4", "B5", "D5:E5", ...(isPoc ? ["B6:E6"] : [])].forEach((address) => {
+    styleRange(ws, address, {
+      fill: colorFill(formInputFill),
+      font: font(),
+      border: { top: darkGray, left: darkGray, bottom: darkGray, right: darkGray },
+    });
+  });
+}
+
+function writePublicInstructions(ws, config, startRow) {
+  sectionHeader(ws, `A${startRow}:E${startRow}`, "HOW TO USE");
+  config.instructions.forEach((instruction, index) => {
+    const row = startRow + 1 + index;
+    ws.mergeCells(`A${row}:E${row}`);
+    ws.getCell(`A${row}`).value = instruction;
+    ws.getRow(row).height = 36;
+    borderRange(ws, `A${row}:E${row}`);
+  });
+}
+
+function writePublicLegend(ws, config, headerRow) {
+  sectionHeader(ws, `A${headerRow}:E${headerRow}`, "SCORING LEVELS EXPLAINED - the same five apply to every subtopic");
+  const tableRow = headerRow + 1;
+  ws.getCell(`A${tableRow}`).value = "Level";
+  ws.getCell(`B${tableRow}`).value = "%";
+  ws.getCell(`C${tableRow}`).value = "What it means";
+  ws.mergeCells(`C${tableRow}:E${tableRow}`);
+  styleRange(ws, `A${tableRow}:E${tableRow}`, { fill: colorFill(tableHeaderFill), font: font("#FFFFFF", { bold: true }), border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray } });
+  config.levelDescriptions.forEach(([label, percent, description], index) => {
+    const row = tableRow + 1 + index;
+    ws.getCell(`A${row}`).value = label;
+    ws.getCell(`B${row}`).value = percent;
+    ws.getCell(`C${row}`).value = description;
+    ws.mergeCells(`C${row}:E${row}`);
+    ws.getCell(`A${row}`).font = font("#000000", { bold: true });
+    ws.getCell(`B${row}`).font = font("#FF0000", { bold: true });
+    ws.getCell(`B${row}`).alignment = { horizontal: "center" };
+    borderRange(ws, `A${row}:E${row}`);
+  });
+  const noteRow = tableRow + 6;
+  ws.mergeCells(`A${noteRow}:E${noteRow}`);
+  ws.getCell(`A${noteRow}`).value = config.finalTopicNote;
+  ws.getCell(`A${noteRow}`).font = font("#666666", { italic: true });
+  ws.getCell(`A${noteRow}`).alignment = { wrapText: true };
+  ws.getRow(noteRow).height = 30;
+  borderRange(ws, `A${noteRow}:E${noteRow}`);
+}
+
+function setScoreHeader(ws, row) {
+  sectionHeader(ws, `A${row}:E${row}`, "SCORING");
+  ws.getCell(`A${row + 1}`).value = "Subtopic";
+  ws.getCell(`B${row + 1}`).value = "Level (pick one)";
+  ws.getCell(`C${row + 1}`).value = "%";
+  ws.getCell(`E${row + 1}`).value = "Notes (per topic)";
+  styleRange(ws, `A${row + 1}:E${row + 1}`, { fill: colorFill(tableHeaderFill), font: font("#FFFFFF", { bold: true }), border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray } });
+}
+
+function scoreFormula(row, config) {
+  const [, first, second, third, fourth, fifth] = config.levels;
+  return `IF($B${row}="${fifth}",100,IF($B${row}="${fourth}",75,IF($B${row}="${third}",50,IF($B${row}="${second}",25,IF($B${row}="${first}",0,"")))))`;
+}
+
+function writePublicTopic(ws, topic, index, row, config, levelList, isFlagship) {
+  const weight = Number(topic.weight) || 0;
+  const subtopics = topic.subtopics || [];
+  ws.mergeCells(`A${row}:E${row}`);
+  const gateFloor = Math.ceil(weight * 0.6 * 10) / 10;
+  ws.getCell(`A${row}`).value = isFlagship
+    ? `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight}) ◆ GATING - must score ≥ 60% (${gateFloor}/${weight})`
+    : `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight})`;
+  styleRange(ws, `A${row}:E${row}`, {
+    fill: colorFill(isFlagship ? "#E1251B" : topicBandFill),
+    font: font("#FFFFFF", { bold: true, size: isFlagship ? 11 : 9.5 }),
+    border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray },
+  });
+  row += 1;
+  const start = row;
+  subtopics.forEach((item) => {
+    const subtopic = typeof item === "string" ? { name: item } : item;
+    const name = subtopic.name || "Evidence item";
+    ws.getCell(`A${row}`).value = name;
+    ws.getCell(`B${row}`).value = "";
+    ws.getCell(`C${row}`).value = { formula: scoreFormula(row, config) };
+    ws.getCell(`A${row}`).alignment = { wrapText: true, vertical: "top" };
+    ws.getCell(`B${row}`).fill = colorFill(formInputFill);
+    addValidation(ws.getCell(`B${row}`), levelList);
+    ws.getRow(row).height = Math.max(18, subtopicRowHeight(name));
+    borderRange(ws, `A${row}:E${row}`);
+    row += 1;
+  });
+  const end = row - 1;
+  ws.getCell(`A${row}`).value = `▸ Topic ${index + 1} score (average x weight)`;
+  ws.getCell(`B${row}`).value = { formula: `IFERROR(AVERAGE(C${start}:C${end})*${weight}/100,0)` };
+  ws.getCell(`B${row}`).numFmt = `0.0" / ${weight}"`;
+  ws.getCell(`D${row}`).value = "Notes:";
+  ws.getCell(`E${row}`).fill = colorFill(formInputFill);
+  styleRange(ws, `A${row}:B${row}`, { font: font("#000000", { bold: true }) });
+  ws.getCell(`D${row}`).font = font("#000000", { bold: true });
+  borderRange(ws, `A${row}:E${row}`);
+  return { nextRow: row + 1, scoreRow: row, subtopicRange: subtopics.length ? `B${start}:B${end}` : null, valueFormula: `COUNTIF(C${start}:C${end},100)`, weight };
+}
+
+function writePublicSummary(ws, summary, track, config, context, lists) {
+  const { scoreRows, scoreWeights, unscoredFormula, valueCountFormula, valueGate, valueTopicCount, flagshipIndex } = context;
+  const isPitch = track === "pitch";
+  const isPoc = track === "poc";
+  sectionHeader(ws, `A${summary}:E${summary}`, "TOTAL SCORE");
+  ws.getCell(`C${summary}`).value = { formula: `SUM(${scoreRows.map((row) => `B${row}`).join(",") || "0"})` };
+  ws.getCell(`C${summary}`).numFmt = '0.0" / 100"';
+
+  sectionHeader(ws, `A${summary + 2}:E${summary + 2}`, "SCORE SUMMARY - reference signals for your verdict");
+  ws.getCell(`A${summary + 3}`).value = "Unscored subtopics remaining";
+  ws.getCell(`C${summary + 3}`).value = { formula: unscoredFormula };
+  ws.getCell(`A${summary + 4}`).value = isPitch ? "Discovery & qualification signal (flagship)" : isPoc ? "Flagship topic signal (floor 60%)" : "[Flagship topic] signal (optional - repoint or delete)";
+  const flagshipRow = flagshipIndex >= 0 ? scoreRows[flagshipIndex] : scoreRows[Math.min(2, scoreRows.length - 1)];
+  const flagshipWeight = flagshipIndex >= 0 ? scoreWeights[flagshipIndex] : null;
+  ws.getCell(`C${summary + 4}`).value = isPoc && flagshipWeight
+    ? { formula: `IF(C${summary + 3}>0,"—",B${flagshipRow}/${flagshipWeight})` }
+    : { formula: `IF(C${summary + 3}>0,"—",B${flagshipRow || 1})` };
+  if (isPoc) {
+    ws.getCell(`C${summary + 4}`).numFmt = "0.0%";
+    ws.addConditionalFormatting({
+      ref: `C${summary + 4}:E${summary + 4}`,
+      rules: [
+        { type: "cellIs", priority: 1, operator: "lessThan", formulae: ["0.6"], style: { fill: colorFill("#E1251B"), font: { color: { argb: "FFFFFFFF" }, bold: true } } },
+        { type: "cellIs", priority: 2, operator: "greaterThanOrEqual", formulae: ["0.6"], style: { fill: colorFill("#0B7A34"), font: { color: { argb: "FFFFFFFF" }, bold: true } } },
+      ],
+    });
+  }
+
+  const layer1Row = isPitch ? summary + 12 : summary + 6;
+  const layer1Input = layer1Row + 1;
+  sectionHeader(ws, `A${layer1Row}:E${layer1Row}`, "LAYER 1 - COMPETENCY (validator's judgment - use the signals above and pick one)");
+  ws.mergeCells(`A${layer1Input}:E${layer1Input}`);
+  styleRange(ws, `A${layer1Input}:E${layer1Input}`, { fill: colorFill(formInputFill), border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray } });
+  addValidation(ws.getCell(`A${layer1Input}`), lists.verdict);
+
+  if (isPitch) {
+    sectionHeader(ws, `A${summary + 6}:E${summary + 6}`, "EVALUATOR-RATED SIGNALS (your judgment - rate both before the verdict)");
+    [["Was the presentation compelling?", lists.compelling, 7], ["Was the presentation accurate?", lists.accurate, 9]].forEach(([label, list, offset]) => {
+      ws.getCell(`A${summary + offset}`).value = label;
+      ws.getCell(`C${summary + offset}`).fill = colorFill(formInputFill);
+      addValidation(ws.getCell(`C${summary + offset}`), list);
+      borderRange(ws, `A${summary + offset}:E${summary + offset}`);
+    });
+  }
+
+  const layer2Row = isPitch ? summary + 15 : summary + 9;
+  const countRow = layer2Row + 1;
+  const gateRow = layer2Row + 2;
+  sectionHeader(ws, `A${layer2Row}:E${layer2Row}`, config.layer2Header);
+  ws.getCell(`A${countRow}`).value = `${config.valueCountLabel}${isPitch || isPoc ? ` (of ${valueTopicCount})` : ""}`;
+  ws.getCell(`C${countRow}`).value = { formula: valueCountFormula };
+  ws.getCell(`A${gateRow}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=C${settingsValueRow(summary, track)},"${config.gateMet}","${config.gateNotMet}"))` };
+
+  const decisionsRow = isPitch ? summary + 19 : summary + 13;
+  sectionHeader(ws, `A${decisionsRow}:E${decisionsRow}`, "VALIDATOR DECISIONS");
+  const decisionLabels = isPoc
+    ? ["Passing grade (follows your verdict)", "If something failed outside the induced scenarios, did the SE recover gracefully?", "Is the SE eligible to grade other SEs on this product? (automatic)", "Role granted (only if the SE volunteered)"]
+    : isPitch
+      ? ["Passing grade (follows your verdict)", "If objections or tough questions arose - handled gracefully?", "Correlated customer needs to additional Fortinet products?", "Eligible to grade others on this pitch? (automatic)", "Role granted (only if the presenter volunteered)"]
+      : ["Passing grade", "Did the presenter handle a curveball globally?", "Is the presenter eligible to grade others on this product? (automatic)", "Role granted (only if the presenter volunteered)"];
+  decisionLabels.forEach((label, index) => {
+    const row = decisionsRow + 1 + index;
+    ws.getCell(`A${row}`).value = label;
+    ws.getCell(`A${row}`).fill = colorFill(formLabelFill);
+    ws.getCell(`A${row}`).font = font("#000000", { bold: true });
+    ws.mergeCells(`C${row}:E${row}`);
+    if (index === 0) ws.getCell(`C${row}`).value = { formula: `IF(A${layer1Input}="","—",IF(A${layer1Input}="Competency met","Yes","No"))` };
+    if (label.includes("(automatic)")) ws.getCell(`C${row}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=C${settingsValueRow(summary, track)},"Eligible","Not yet"))` };
+    if (index === decisionLabels.length - 1) addValidation(ws.getCell(`C${row}`), lists.role);
+    if (index > 0 && !label.includes("(automatic)") && index !== decisionLabels.length - 1) addValidation(ws.getCell(`C${row}`), lists.yesNo);
+    ws.getCell(`C${row}`).fill = colorFill(index === 0 || label.includes("(automatic)") ? "#FFFFFF" : formInputFill);
+    borderRange(ws, `A${row}:E${row}`);
+  });
+
+  const feedbackRow = isPitch ? summary + 26 : summary + 19;
+  sectionHeader(ws, `A${feedbackRow}:E${feedbackRow}`, "QUALITATIVE FEEDBACK");
+  [config.feedbackLiked, "Things that need more attention", "Additional feedback"].forEach((label, index) => {
+    const row = feedbackRow + 1 + index;
+    ws.getCell(`A${row}`).value = label;
+    ws.getCell(`A${row}`).fill = colorFill(formLabelFill);
+    ws.getCell(`A${row}`).font = font("#000000", { bold: true });
+    ws.mergeCells(`C${row}:E${row}`);
+    styleRange(ws, `C${row}:E${row}`, { fill: colorFill(formInputFill) });
+    ws.getRow(row).height = 39.75;
+    borderRange(ws, `A${row}:E${row}`);
+  });
+
+  const settingsRow = isPitch ? summary + 32 : summary + 24;
+  sectionHeader(ws, `A${settingsRow}:E${settingsRow}`, isPoc ? "TEMPLATE SETTINGS - for adapting; hide after adapting" : "TEMPLATE SETTINGS - for adapting; leave alone while grading");
+  ws.getCell(`A${settingsRow + 1}`).value = config.settingsLabel;
+  ws.getCell(`A${settingsRow + 1}`).fill = colorFill(formLabelFill);
+  ws.getCell(`A${settingsRow + 1}`).font = font("#000000", { bold: true });
+  ws.getCell(`C${settingsRow + 1}`).value = valueGate;
+  borderRange(ws, `A${settingsRow + 1}:C${settingsRow + 1}`);
+  borderRange(ws, `A${summary}:E${settingsRow + 1}`);
+}
+
+function settingsValueRow(summary, track) {
+  return track === "pitch" ? summary + 33 : summary + 25;
+}
+
+async function createPublicWorkbook(rubric, track = "demo") {
+  const config = trackConfigs[track] || trackConfigs.demo;
+  const topics = rubric.topics || [];
+  const totalWeight = topics.reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
+  if (totalWeight > 100) throw new Error("Topic weights cannot exceed 100%.");
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Rubric Builder";
+  wb.created = new Date();
+  const ws = wb.addWorksheet("Rubric", { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 44 }, { width: 17.18 }, { width: 16.09 }, { width: 18 }, { width: 44 }];
+  ws.eachRow((row) => { row.font = font(); });
+
+  const lists = wb.addWorksheet("Validation Lists");
+  lists.state = "veryHidden";
+  const listRefs = {
+    levels: listFormula(lists, "levels", config.levels),
+    verdict: listFormula(lists, "verdict", ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"]),
+    yesNo: listFormula(lists, "yesNo", ["", "Yes", "No", "N/A"]),
+    role: listFormula(lists, "role", ["", "-", "Validator", "Mentor"]),
+    compelling: listFormula(lists, "compelling", ["", "1 - Would seek alternative vendors", "2 - Doubts about the solution", "3 - Likely to continue with Fortinet", "4 - Unlikely to consider other vendors", "5 - Will move forward with Fortinet"]),
+    accurate: listFormula(lists, "accurate", ["", "1 - Misrepresented the product", "2 - Accurate but FAB unclear", "3 - Accurate; FAB satisfactorily conveyed", "4 - Accurate; FAB insightful and robust"]),
+  };
+
+  writePublicHeader(ws, rubric, config, track);
+  const isPoc = track === "poc";
+  writePublicInstructions(ws, config, isPoc ? 9 : 7);
+  writePublicLegend(ws, config, isPoc ? 16 : 13);
+  setScoreHeader(ws, isPoc ? 25 : 22);
+
+  let row = isPoc ? 27 : 24;
+  const scoreRows = [];
+  const scoreWeights = [];
+  const unscoredRanges = [];
+  const valueCountFormulas = [];
+  const flaggedIndex = flagshipTopicIndex(topics);
+  topics.forEach((topic, index) => {
+    const result = writePublicTopic(ws, topic, index, row, config, listRefs.levels, index === flaggedIndex);
+    row = result.nextRow;
+    scoreRows.push(result.scoreRow);
+    scoreWeights.push(result.weight);
+    if (result.subtopicRange) unscoredRanges.push(result.subtopicRange);
+    if (!(config.excludeFinalTopicFromGate && index === topics.length - 1)) valueCountFormulas.push(result.valueFormula);
+  });
+
+  const summary = row + 1;
+  writePublicSummary(ws, summary, track, config, {
+    scoreRows,
+    scoreWeights,
+    unscoredFormula: unscoredRanges.map((range) => `COUNTBLANK(${range})`).join("+") || "0",
+    valueCountFormula: valueCountFormulas.join("+") || "0",
+    valueGate: Number(rubric.valueGate) || 0,
+    valueTopicCount: config.excludeFinalTopicFromGate ? Math.max(0, topics.length - 1) : topics.length,
+    flagshipIndex: flaggedIndex,
+  }, listRefs);
+
+  wb.addWorksheet("How to adapt").getCell("A1").value = "Use the browser builder to edit topics, subtopics, weights, and the flagship marker. Export a fresh workbook after changes.";
+  return wb;
+}
+
 function serveFile(request, response) {
   const requested = request.url === "/" ? "index.html" : request.url.slice(1);
   const file = path.resolve(root, requested);
@@ -992,13 +1366,8 @@ createServer(async (request, response) => {
       ? JSON.parse(new URLSearchParams(body).get("rubric") || "{}")
       : JSON.parse(body);
     const track = trackConfigs[rubric.track] ? rubric.track : "demo";
-    const workbook = await createTemplateWorkbook(rubric, track);
-    const output = await SpreadsheetFile.exportXlsx(workbook);
-    const exportDir = await mkdtemp(path.join(tmpdir(), "rubric-builder-"));
-    const exportPath = path.join(exportDir, "rubric.xlsx");
-    await output.save(exportPath);
-    const bytes = await applyExportPackageFixes(await readFile(exportPath));
-    await rm(exportDir, { recursive: true, force: true });
+    const workbook = await createPublicWorkbook(rubric, track);
+    const bytes = await workbook.xlsx.writeBuffer();
     response.writeHead(200, {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${cleanFilename(rubric.name)}.xlsx"`,
