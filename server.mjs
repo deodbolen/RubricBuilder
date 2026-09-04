@@ -129,6 +129,25 @@ function productNameForExport(rubric, config) {
   return productName.toLowerCase() === config.title.toLowerCase() ? "" : productName;
 }
 
+function flagshipTopicIndex(topics) {
+  return (topics || []).findIndex((topic) => topic?.flagship);
+}
+
+function applyFlagshipSignalFormatting(sheet, rangeAddress) {
+  const range = sheet.getRange(rangeAddress);
+  range.format.numberFormat = "0.0%";
+  range.conditionalFormats.add("cellIs", {
+    operator: "lessThan",
+    formula: 0.6,
+    format: { fill: "#E1251B", font: { color: "#FFFFFF", bold: true } },
+  });
+  range.conditionalFormats.add("cellIs", {
+    operator: "greaterThanOrEqual",
+    formula: 0.6,
+    format: { fill: "#0B7A34", font: { color: "#FFFFFF", bold: true } },
+  });
+}
+
 function applyHeaderSpec(sheet, rubric, config) {
   const productName = productNameForExport(rubric, config);
   const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
@@ -492,7 +511,9 @@ function applyPocSummaryBlockStyle(sheet, summary) {
 }
 
 function writePocSummaryContent(sheet, summary, context) {
-  const { config, scoreRows, unscoredFormula, valueCountFormula, valueGate, valueTopicCount } = context;
+  const { config, scoreRows, scoreWeights, flagshipIndex: flaggedIndex, unscoredFormula, valueCountFormula, valueGate, valueTopicCount } = context;
+  const flagshipScoreRow = flaggedIndex >= 0 ? scoreRows[flaggedIndex] : null;
+  const flagshipWeight = flaggedIndex >= 0 ? scoreWeights[flaggedIndex] : 0;
   sheet.getRange(`A${summary}:E${summary + 28}`).clear({ applyTo: "contents" });
   sheet.getRange(`A${summary}`).values = [["TOTAL SCORE"]];
   sheet.getRange(`C${summary}`).formulas = [[`=SUM(${scoreRows.map((scoreRow) => `B${scoreRow}`).join(",") || "0"})`]];
@@ -501,7 +522,7 @@ function writePocSummaryContent(sheet, summary, context) {
   sheet.getRange(`A${summary + 3}`).values = [["Unscored subtopics remaining"]];
   sheet.getRange(`C${summary + 3}`).formulas = [[`=${unscoredFormula}`]];
   sheet.getRange(`A${summary + 4}`).values = [["Flagship topic signal (floor 60%)"]];
-  sheet.getRange(`C${summary + 4}`).formulas = [[`=IF(C${summary + 3}>0,"—",B${scoreRows[2] || scoreRows[0] || 1})`]];
+  sheet.getRange(`C${summary + 4}`).formulas = [[flagshipScoreRow && flagshipWeight ? `=IF(C${summary + 3}>0,"—",B${flagshipScoreRow}/${flagshipWeight})` : `="—"`]];
   sheet.getRange(`A${summary + 6}`).values = [["LAYER 1 - COMPETENCY (validator's judgment - use the signals above and pick one)"]];
   sheet.getRange(`A${summary + 7}`).values = [[""]];
   sheet.getRange(`A${summary + 9}`).values = [[config.layer2Header]];
@@ -630,16 +651,20 @@ async function createPocTemplateWorkbook(rubric) {
 
   let row = 27;
   const scoreRows = [];
+  const scoreWeights = [];
   const unscoredRanges = [];
   const valueCountFormulas = [];
   const subtopicRows = [];
+  const flaggedIndex = flagshipTopicIndex(rubric.topics || []);
   for (const [index, topic] of (rubric.topics || []).entries()) {
     const subtopics = topic.subtopics || [];
     const weight = Number(topic.weight) || 0;
+    const isFlagship = index === flaggedIndex;
+    const gateFloor = Math.ceil(weight * 0.6 * 10) / 10;
     sheet.getRange(`A${row}:E${row}`).merge();
-    sheet.getRange(`A${row}`).values = [[index === 2 ? `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight}) ◆ GATING - must score ≥ 60% (12/20)` : `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight})`]];
+    sheet.getRange(`A${row}`).values = [[isFlagship ? `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight}) ◆ GATING - must score ≥ 60% (${gateFloor}/${weight})` : `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight})`]];
     sheet.getRange(`A${row}:E${row}`).format.rowHeight = 21.75;
-    if (index === 2) {
+    if (isFlagship) {
       sheet.getRange(`A${row}:E${row}`).format.fill = "#E1251B";
       sheet.getRange(`A${row}:E${row}`).format.font = { ...workbookFont, size: 11, bold: true, color: "#FFFFFF" };
     } else {
@@ -667,6 +692,7 @@ async function createPocTemplateWorkbook(rubric) {
     sheet.getRange(`A${row}:E${row}`).format.rowHeight = 18;
     applyTopicScoreRowStyle(sheet, row);
     scoreRows.push(row);
+    scoreWeights.push(weight);
     valueCountFormulas.push(`COUNTIF(C${start}:C${end},100)`);
     row += 1;
   }
@@ -685,6 +711,8 @@ async function createPocTemplateWorkbook(rubric) {
   writePocSummaryContent(sheet, summary, {
     config,
     scoreRows,
+    scoreWeights,
+    flagshipIndex: flaggedIndex,
     unscoredFormula,
     valueCountFormula,
     valueGate: Number(rubric.valueGate) || 0,
@@ -701,6 +729,7 @@ async function createPocTemplateWorkbook(rubric) {
   ].forEach((rangeAddress) => applySectionHeaderStyle(sheet, rangeAddress));
   subtopicRows.forEach((subtopicRow) => applySubtopicRowStyle(sheet, subtopicRow));
   applyPocSummaryBlockStyle(sheet, summary);
+  applyFlagshipSignalFormatting(sheet, `C${summary + 4}:E${summary + 4}`);
 
   const verdictOptions = ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"];
   const yesNoOptions = ["", "Yes", "No", "N/A"];

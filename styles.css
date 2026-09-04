@@ -45,11 +45,18 @@ input, select { width: 100%; border: 1px solid var(--line); border-radius: 7px; 
 .topic-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); box-shadow: 0 3px 0 rgba(39,65,55,.03); transition: transform .16s ease, opacity .16s ease, border-color .16s ease; }
 .topic-card.dragging { opacity: .42; transform: scale(.985); }.topic-card.drop-target { border-color: var(--orange); box-shadow: 0 0 0 2px rgba(217,121,65,.25); }
 .topic-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 15px 16px; background: #edf2e8; }
+.topic-card.flagship { border-color: #e1251b; }
+.topic-card.flagship .topic-header { background: #e1251b; color: white; }
+.topic-card.flagship .drag-handle { color: rgba(255,255,255,.75); }
+.topic-card.flagship .topic-number { background: #8f1f18; }
+.topic-card.flagship .flagship-input span, .topic-card.flagship .weight-input span, .topic-card.flagship .weight-input em { color: white; }
 .topic-ident { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }.drag-handle { border: 0; background: transparent; padding: 0; color: #75847c; cursor: grab; font: 20px/1 "DM Mono", monospace; }.drag-handle:active { cursor: grabbing; }
 .topic-number { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--moss); color: white; font: 500 11px "DM Mono", monospace; flex-shrink: 0; }
 .topic-name { border: 1px solid #d2dbd2; background: #ffffff; padding: 8px 10px; border-radius: 6px; font: 650 18px Fraunces, serif; }
 .topic-name:focus { outline: 2px solid rgba(47,110,88,.25); border-color: var(--moss); }
 .topic-controls { display: flex; align-items: center; gap: 13px; flex-shrink: 0; }
+.flagship-input { display: flex; grid-template-columns: none; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; }
+.flagship-input input { width: 16px; height: 16px; accent-color: #e1251b; }
 .weight-input { grid-template-columns: auto 54px auto; align-items: center; gap: 4px; }.weight-input span { font-size: 11px; }.weight-input input { padding: 6px; text-align: right; }.weight-input em { font: 500 12px "DM Mono", monospace; font-style: normal; }
 .subtopic-list { padding: 4px 16px 3px; }
 .subtopic-row { display: grid; grid-template-columns: 12px minmax(130px, 1fr) 24px; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf0eb; }

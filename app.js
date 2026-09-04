@@ -2,7 +2,7 @@ if (window.location.protocol === "file:") {
   window.location.replace("http://127.0.0.1:4173/");
 }
 
-const storageKey = "rubric-builder-v4";
+const storageKey = "rubric-builder-v5";
 
 const sample = {
   name: "Demo Validation Rubric",
@@ -10,7 +10,7 @@ const sample = {
   topics: [
     { name: "Console fluency & navigation", weight: 15, subtopics: ["Navigate the primary workspace", "Find relevant customer data", "Explain the workflow clearly"] },
     { name: "Setup & onboarding walkthrough", weight: 15, subtopics: ["Set up a new user", "Configure a core setting", "Show a successful first outcome"] },
-    { name: "Flagship capability flow", weight: 20, subtopics: ["Start the flagship workflow", "Complete the core action", "Tie it to a customer outcome"] },
+    { name: "Flagship capability flow", weight: 20, flagship: true, subtopics: ["Start the flagship workflow", "Complete the core action", "Tie it to a customer outcome"] },
     { name: "Core capabilities", weight: 15, subtopics: ["Demonstrate a central capability", "Handle a common use case"] },
     { name: "Visibility & reporting", weight: 10, subtopics: ["Show meaningful reporting", "Connect it to a decision"] },
     { name: "Operational awareness", weight: 10, subtopics: ["Recover from a demo interruption", "Explain operational guardrails"] },
@@ -24,7 +24,7 @@ const samples = {
     name: "Pitch Validation Rubric",
     valueGate: 5,
     topics: [
-      { name: "Discovery & qualification", weight: 20, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown", "[Rename] subtopic 4 - what must be shown"] },
+      { name: "Discovery & qualification", weight: 20, flagship: true, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown", "[Rename] subtopic 4 - what must be shown"] },
       { name: "Features, advantages & benefits", weight: 20, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown", "[Rename] subtopic 4 - what must be shown"] },
       { name: "Common use cases & buyers", weight: 15, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown"] },
       { name: "Competitive positioning", weight: 15, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown"] },
@@ -38,7 +38,7 @@ const samples = {
     topics: [
       { name: "Environment preparation & staging", weight: 15, subtopics: ["[Rename] Precooked core capability is in place and working before the session", "[Rename] Profiles / policies staged for the POC scenario", "[Rename] Groups or segments prestaged - product-native, not borrowed from AD or an OU", "[Rename] Managed asset enrolled, reporting in, and correctly tagged or classified"] },
       { name: "Integration & dependency verification", weight: 15, subtopics: ["[Rename] The connector or trust relationship is established and authorized on both sides", "[Rename] Shared objects arrive on the consuming device and are visible there", "[Rename] A rule or policy on the consuming side actually uses them"] },
-      { name: "[RENAME] FLAGSHIP PROOF UNDER LIVE FAILURE", weight: 20, subtopics: ["[Rename] The continuous check is running and its current state is visible", "[Rename] Induces a real failure on request - not a simulated or narrated one", "[Rename] The state flips and the intended consequence actually lands", "[Rename] Points at the evidence that proves it - the log, the event, the denied session"] },
+      { name: "[RENAME] FLAGSHIP PROOF UNDER LIVE FAILURE", weight: 20, flagship: true, subtopics: ["[Rename] The continuous check is running and its current state is visible", "[Rename] Induces a real failure on request - not a simulated or narrated one", "[Rename] The state flips and the intended consequence actually lands", "[Rename] Points at the evidence that proves it - the log, the event, the denied session"] },
       { name: "Policy differentiation & segmentation", weight: 15, subtopics: ["[Rename] Different groups receive genuinely different policy - segmentation proven, not described", "[Rename] Distinguishes two commonly confused capabilities by showing them behave differently", "[Rename] Pushes a change and confirms it landed on the target"] },
       { name: "Troubleshooting", weight: 20, subtopics: ["[Rename] Diagnoses a broken enrollment, telemetry, or connectivity dependency", "[Rename] Diagnoses a broken access or enforcement path - trust, mismatch, scope, or ordering", "[Rename] Uses the right evidence sources in the right order rather than guessing"] },
       { name: "Scoping & engagement judgment (walkthrough accepted)", weight: 15, subtopics: ["[Rename] Walks the configuration for an integration that need not be built in-session", "[Rename] Explains the migration path off an incumbent agent, and the rollback story", "[Rename] Names when to recommend the Best Practice Service (BPS) instead of proceeding solo"] }
@@ -67,6 +67,8 @@ function load() {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey));
     if (stored?.rubrics) return normalizeState(stored);
+    const v4 = JSON.parse(localStorage.getItem("rubric-builder-v4"));
+    if (v4?.rubrics) return normalizeState(v4);
     const v3 = JSON.parse(localStorage.getItem("rubric-builder-v3"));
     if (v3?.rubrics) {
       fallback.activeTrack = v3.activeTrack || "demo";
@@ -95,6 +97,10 @@ function normalizeState(rawState) {
   };
   Object.keys(samples).forEach((track) => {
     if (rawState.rubrics?.[track]) next.rubrics[track] = rawState.rubrics[track];
+    next.rubrics[track].topics = (next.rubrics[track].topics || []).map((topic, index) => ({
+      ...topic,
+      flagship: Boolean(topic.flagship ?? samples[track].topics[index]?.flagship),
+    }));
   });
   return next;
 }
@@ -104,7 +110,7 @@ function save() {
   state.rubrics[activeTrack] = rubric;
   localStorage.setItem(storageKey, JSON.stringify(state));
 }
-function topicDefaults() { return { name: "New topic", weight: 0, subtopics: ["What must be demonstrated"] }; }
+function topicDefaults() { return { name: "New topic", weight: 0, flagship: false, subtopics: ["What must be demonstrated"] }; }
 
 function render() {
   const meta = trackMeta[activeTrack];
@@ -123,12 +129,20 @@ function render() {
 function makeTopic(topic, topicIndex) {
   const element = document.querySelector("#topic-template").content.firstElementChild.cloneNode(true);
   element.dataset.topicIndex = topicIndex;
+  element.classList.toggle("flagship", Boolean(topic.flagship));
   addTopicDragEvents(element);
   element.querySelector(".topic-number").textContent = topicIndex + 1;
   const name = element.querySelector(".topic-name"); name.value = topic.name;
   name.addEventListener("input", (event) => { topic.name = event.target.value; save(); });
   const weight = element.querySelector(".topic-weight"); weight.value = topic.weight;
   weight.addEventListener("input", (event) => { topic.weight = Number(event.target.value) || 0; updateWeightStatus(); save(); });
+  const flagship = element.querySelector(".topic-flagship");
+  flagship.checked = Boolean(topic.flagship);
+  flagship.addEventListener("change", (event) => {
+    rubric.topics.forEach((candidate) => { candidate.flagship = false; });
+    topic.flagship = event.target.checked;
+    render();
+  });
   element.querySelector(".delete-topic").addEventListener("click", () => { rubric.topics.splice(topicIndex, 1); render(); });
   const list = element.querySelector(".subtopic-list");
   topic.subtopics.forEach((subtopic, subtopicIndex) => list.append(makeSubtopic(topic, subtopic, subtopicIndex)));
