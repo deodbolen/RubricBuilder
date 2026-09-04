@@ -2,7 +2,7 @@ if (window.location.protocol === "file:") {
   window.location.replace("http://127.0.0.1:4173/");
 }
 
-const storageKey = "rubric-builder-v3";
+const storageKey = "rubric-builder-v4";
 
 const sample = {
   name: "Demo Validation Rubric",
@@ -36,10 +36,12 @@ const samples = {
     name: "POC Validation Rubric",
     valueGate: 3,
     topics: [
-      { name: "Scenario fit", weight: 25, subtopics: ["Confirm the success criteria", "Match the scenario to user needs"] },
-      { name: "Execution", weight: 25, subtopics: ["Complete the core workflow", "Handle expected edge cases"] },
-      { name: "Validation", weight: 25, subtopics: ["Tie results to the success criteria", "Capture customer confirmation"] },
-      { name: "Handoff readiness", weight: 25, subtopics: ["Summarize outcomes", "Identify next steps"] }
+      { name: "Environment preparation & staging", weight: 15, subtopics: ["[Rename] Precooked core capability is in place and working before the session", "[Rename] Profiles / policies staged for the POC scenario", "[Rename] Groups or segments prestaged - product-native, not borrowed from AD or an OU", "[Rename] Managed asset enrolled, reporting in, and correctly tagged or classified"] },
+      { name: "Integration & dependency verification", weight: 15, subtopics: ["[Rename] The connector or trust relationship is established and authorized on both sides", "[Rename] Shared objects arrive on the consuming device and are visible there", "[Rename] A rule or policy on the consuming side actually uses them"] },
+      { name: "[RENAME] FLAGSHIP PROOF UNDER LIVE FAILURE", weight: 20, subtopics: ["[Rename] The continuous check is running and its current state is visible", "[Rename] Induces a real failure on request - not a simulated or narrated one", "[Rename] The state flips and the intended consequence actually lands", "[Rename] Points at the evidence that proves it - the log, the event, the denied session"] },
+      { name: "Policy differentiation & segmentation", weight: 15, subtopics: ["[Rename] Different groups receive genuinely different policy - segmentation proven, not described", "[Rename] Distinguishes two commonly confused capabilities by showing them behave differently", "[Rename] Pushes a change and confirms it landed on the target"] },
+      { name: "Troubleshooting", weight: 20, subtopics: ["[Rename] Diagnoses a broken enrollment, telemetry, or connectivity dependency", "[Rename] Diagnoses a broken access or enforcement path - trust, mismatch, scope, or ordering", "[Rename] Uses the right evidence sources in the right order rather than guessing"] },
+      { name: "Scoping & engagement judgment (walkthrough accepted)", weight: 15, subtopics: ["[Rename] Walks the configuration for an integration that need not be built in-session", "[Rename] Explains the migration path off an incumbent agent, and the rollback story", "[Rename] Names when to recommend the Best Practice Service (BPS) instead of proceeding solo"] }
     ]
   }
 };
@@ -47,7 +49,7 @@ const samples = {
 const trackMeta = {
   demo: { label: "Demo", exportReady: true, gateLabel: "Value-tied topics required", note: "" },
   pitch: { label: "Pitch", exportReady: true, gateLabel: "Tailoring gate minimum", note: "" },
-  poc: { label: "POC", exportReady: false, gateLabel: "Validation gate minimum", note: "POC layout pending." },
+  poc: { label: "POC", exportReady: true, gateLabel: "Validation gate minimum", note: "" },
 };
 
 let state = load();
@@ -65,6 +67,13 @@ function load() {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey));
     if (stored?.rubrics) return normalizeState(stored);
+    const v3 = JSON.parse(localStorage.getItem("rubric-builder-v3"));
+    if (v3?.rubrics) {
+      fallback.activeTrack = v3.activeTrack || "demo";
+      fallback.rubrics.demo = v3.rubrics.demo || fallback.rubrics.demo;
+      fallback.rubrics.pitch = v3.rubrics.pitch || fallback.rubrics.pitch;
+      return normalizeState(fallback);
+    }
     const v2 = JSON.parse(localStorage.getItem("rubric-builder-v2"));
     if (v2?.rubrics) {
       fallback.activeTrack = v2.activeTrack === "poc" ? "demo" : (v2.activeTrack || "demo");

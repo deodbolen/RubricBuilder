@@ -84,6 +84,40 @@ const trackConfigs = {
     feedbackLiked: "Things I liked about the pitch",
     excludeFinalTopicFromGate: true,
   },
+  poc: {
+    title: "POC Validation Rubric",
+    subtitle: "Competency Validation Program - POC Track - TEMPLATE",
+    levels: ["", "Not attempted", "Explained only", "Done: prompted", "Done: independent", "Done + validated"],
+    percentMap: [
+      ["Not attempted", 0],
+      ["Explained only", 25],
+      ["Done: prompted", 50],
+      ["Done: independent", 75],
+      ["Done + validated", 100],
+    ],
+    instructions: [
+      "•  This is a do-then-prove validation. Most subtopics require the SE to have built something and to show it working - not to describe it.",
+      "•  Run it in two passes: inspect the prepared environment first, then ask the SE to induce the changes the scenario requires.",
+      "•  Blank = not yet scored (it won't count). To score a zero, pick \"Not attempted\". The Unscored counter below flags anything missed.",
+      "•  The top level is reserved for proof.  A working build reaches \"Done: independent\" (75%); proving it worked against the stated requirement earns \"Done + validated\" (100%).",
+      "•  Topic 3 is the gated topic.  Its score is a signal, not a switch: treat a weak showing there as a serious flag when you make your Layer 1 call.",
+    ],
+    levelDescriptions: [
+      ["Not attempted", 0, "Neither built nor addressed. Absent from the session."],
+      ["Explained only", 25, "Described or talked through, but not built or shown working - when it was buildable."],
+      ["Done: prompted", 50, "Built and working, but only after being asked, reminded, or helped through it."],
+      ["Done: independent", 75, "Built and working, unprompted, start to finish - but not proven against the requirement."],
+      ["Done + validated", 100, "Everything in \"independent\", plus evidence that it met the requirement - the log, the tag state, the denied session, the result the customer asked for."],
+    ],
+    finalTopicNote: "Topic 6 is walkthrough-accepted: the SE is not expected to build these in the session. Read the levels as - Not attempted (0) / Explained only (25), recited generically / Done: prompted (50), walked the configuration only after being asked / Done: independent (75), walked it unprompted and accurately / Done + validated (100), plus applied it to the situation in front of them. Every other topic expects a build.",
+    layer2Header: "LAYER 2 - VALIDATION (automatic)",
+    valueCountLabel: "Topics with proof validated",
+    gateMet: "Validation gate MET - strong pass; eligible for nomination",
+    gateNotMet: "Validation gate NOT met - proof is the development area; not yet endorsed",
+    settingsLabel: "Validation-gate minimum (number of topics)",
+    feedbackLiked: "Things I liked about the POC",
+    excludeFinalTopicFromGate: false,
+  },
 };
 
 function cleanFilename(name) {
@@ -160,6 +194,24 @@ function applyScoringLegendStyle(sheet, config) {
   applyTableBorders(sheet, "A14:E20");
   sheet.getRange("A15:A19").format.font = { ...workbookFont, bold: true };
   sheet.getRange("B15:B19").format.font = { ...workbookFont, bold: true, color: "#FF0000" };
+}
+
+function applyScoringLegendStyleAt(sheet, config, headerRow) {
+  const tableHeaderRow = headerRow + 1;
+  const firstLevelRow = headerRow + 2;
+  const noteRow = headerRow + 7;
+  sheet.getRange(`A${tableHeaderRow}`).values = [["Level"]];
+  sheet.getRange(`B${tableHeaderRow}`).values = [["%"]];
+  sheet.getRange(`C${tableHeaderRow}`).values = [["What it means"]];
+  sheet.getRange(`A${firstLevelRow}:C${firstLevelRow + 4}`).values = config.levelDescriptions;
+  sheet.getRange(`A${noteRow}`).values = [[config.finalTopicNote]];
+  sheet.getRange(`A${tableHeaderRow}:E${tableHeaderRow}`).format.fill = tableHeaderFill;
+  sheet.getRange(`A${tableHeaderRow}:E${tableHeaderRow}`).format.font = { ...workbookFont, bold: true, color: "#FFFFFF" };
+  applyTableBorders(sheet, `A${tableHeaderRow}:E${noteRow}`);
+  sheet.getRange(`A${firstLevelRow}:A${firstLevelRow + 4}`).format.font = { ...workbookFont, bold: true };
+  sheet.getRange(`B${firstLevelRow}:B${firstLevelRow + 4}`).format.font = { ...workbookFont, bold: true, color: "#FF0000" };
+  sheet.getRange(`A${noteRow}:E${noteRow}`).format.font = { ...workbookFont, italic: true, color: "#666666" };
+  sheet.getRange(`A${noteRow}:E${noteRow}`).format.wrapText = true;
 }
 
 function levelFormula(row, config) {
@@ -354,6 +406,119 @@ function writePitchSummaryContent(sheet, summary, context) {
   sheet.getRange(`C${summary + 33}`).values = [[valueGate]];
 }
 
+function applyPocHeader(sheet, rubric, config) {
+  const productName = String(rubric.name || "").trim();
+  const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
+    ? productName
+    : `${productName || "[Product]"} - ${config.title}`;
+  [
+    "A1:E1", "A2:E2", "D4:E4", "D5:E5", "B6:E6", "A7:E7",
+    "A9:E9", "A10:E10", "A11:E11", "A12:E12", "A13:E13", "A14:E14",
+    "A16:E16", "C17:E17", "C18:E18", "C19:E19", "C20:E20", "C21:E21", "C22:E22", "A23:E23",
+    "A25:E25",
+  ].forEach((rangeAddress) => sheet.getRange(rangeAddress).merge());
+
+  sheet.getRange("A1").values = [[title]];
+  sheet.getRange("A2").values = [[config.subtitle]];
+  sheet.getRange("A1").format.font = { ...workbookFont, size: 16, bold: true };
+  sheet.getRange("A2").format.font = { ...workbookFont, size: 9, italic: true, color: "#666666" };
+  sheet.getRange("A4").values = [["Date"]];
+  sheet.getRange("C4").values = [["Presenter (SE)"]];
+  sheet.getRange("A5").values = [["Product"]];
+  sheet.getRange("C5").values = [["Evaluator (SE)"]];
+  sheet.getRange("A6").values = [["POC Scenario / Customer Context"]];
+  sheet.getRange("B5").values = [[productName || "[Product name]"]];
+  sheet.getRange("A7").values = [["Optional. Fill in only if the session was framed around a specific customer situation; leave blank for a generic run."]];
+  sheet.getRange("A9").values = [["HOW TO USE"]];
+  config.instructions.forEach((instruction, index) => {
+    sheet.getRange(`A${10 + index}`).values = [[instruction]];
+  });
+  sheet.getRange("A16").values = [["SCORING LEVELS EXPLAINED - the same five apply to every subtopic"]];
+  sheet.getRange("A25").values = [["SCORING"]];
+
+  ["A4", "C4", "A5", "C5", "A6"].forEach((address) => {
+    const range = sheet.getRange(address);
+    range.format.fill = formLabelFill;
+    range.format.font = { ...workbookFont, size: 10, bold: true };
+    range.format.borders = { preset: "all", style: "thin", color: formBorder };
+  });
+  ["B4", "D4", "B5", "D5", "B6"].forEach((address) => {
+    const range = sheet.getRange(address);
+    range.format.fill = formInputFill;
+    range.format.font = workbookFont;
+    range.format.borders = { preset: "all", style: "thin", color: formBorder };
+  });
+  sheet.getRange("A7:E7").format.font = { ...workbookFont, italic: true, color: "#666666" };
+  applyCellBorders(sheet, "A10:E14");
+}
+
+function applyPocSummaryBlockStyle(sheet, summary) {
+  applyTableBorders(sheet, `A${summary}:E${summary + 28}`);
+  [
+    `A${summary + 3}:B${summary + 4}`,
+    `A${summary + 10}:B${summary + 10}`,
+    `A${summary + 14}:B${summary + 17}`,
+    `A${summary + 20}:B${summary + 22}`,
+    `A${summary + 25}:B${summary + 25}`,
+  ].forEach((rangeAddress) => {
+    const range = sheet.getRange(rangeAddress);
+    range.format.fill = formLabelFill;
+    range.format.font = { ...workbookFont, bold: true };
+  });
+  sheet.getRange(`A${summary + 4}:B${summary + 4}`).format.font = { ...workbookFont, bold: true, color: "#FF0000" };
+  sheet.getRange(`C${summary + 3}:E${summary + 3}`).format.fill = "#F4CCCC";
+  [
+    `A${summary + 7}:E${summary + 7}`,
+    `C${summary + 15}:E${summary + 15}`,
+    `C${summary + 17}:E${summary + 17}`,
+    `C${summary + 20}:E${summary + 22}`,
+  ].forEach((rangeAddress) => {
+    sheet.getRange(rangeAddress).format.fill = formInputFill;
+  });
+  [
+    `C${summary + 4}:E${summary + 4}`,
+    `A${summary + 11}:E${summary + 11}`,
+    `C${summary + 14}:E${summary + 14}`,
+    `C${summary + 16}:E${summary + 16}`,
+    `C${summary + 25}:E${summary + 25}`,
+  ].forEach((rangeAddress) => {
+    sheet.getRange(rangeAddress).format.fill = "#FFFFFF";
+  });
+}
+
+function writePocSummaryContent(sheet, summary, context) {
+  const { config, scoreRows, unscoredFormula, valueCountFormula, valueGate, valueTopicCount } = context;
+  sheet.getRange(`A${summary}:E${summary + 28}`).clear({ applyTo: "contents" });
+  sheet.getRange(`A${summary}`).values = [["TOTAL SCORE"]];
+  sheet.getRange(`C${summary}`).formulas = [[`=SUM(${scoreRows.map((scoreRow) => `B${scoreRow}`).join(",") || "0"})`]];
+  sheet.getRange(`C${summary}`).format.numberFormat = '0.0" / 100"';
+  sheet.getRange(`A${summary + 2}`).values = [["SCORE SUMMARY - reference signals for your verdict"]];
+  sheet.getRange(`A${summary + 3}`).values = [["Unscored subtopics remaining"]];
+  sheet.getRange(`C${summary + 3}`).formulas = [[`=${unscoredFormula}`]];
+  sheet.getRange(`A${summary + 4}`).values = [["Flagship topic signal (floor 60%)"]];
+  sheet.getRange(`C${summary + 4}`).formulas = [[`=IF(C${summary + 3}>0,"—",B${scoreRows[2] || scoreRows[0] || 1})`]];
+  sheet.getRange(`A${summary + 6}`).values = [["LAYER 1 - COMPETENCY (validator's judgment - use the signals above and pick one)"]];
+  sheet.getRange(`A${summary + 7}`).values = [[""]];
+  sheet.getRange(`A${summary + 9}`).values = [[config.layer2Header]];
+  sheet.getRange(`A${summary + 10}`).values = [[`${config.valueCountLabel} (of ${valueTopicCount})`]];
+  sheet.getRange(`C${summary + 10}`).formulas = [[`=${valueCountFormula}`]];
+  sheet.getRange(`A${summary + 11}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 10}>=C${summary + 25},"${config.gateMet}","${config.gateNotMet}"))`]];
+  sheet.getRange(`A${summary + 13}`).values = [["VALIDATOR DECISIONS"]];
+  sheet.getRange(`A${summary + 14}`).values = [["Passing grade (follows your verdict)"]];
+  sheet.getRange(`C${summary + 14}`).formulas = [[`=IF(A${summary + 7}="","—",IF(A${summary + 7}="Competency met","Yes","No"))`]];
+  sheet.getRange(`A${summary + 15}`).values = [["If something failed outside the induced scenarios, did the SE recover gracefully?"]];
+  sheet.getRange(`A${summary + 16}`).values = [["Is the SE eligible to grade other SEs on this product? (automatic)"]];
+  sheet.getRange(`C${summary + 16}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 10}>=C${summary + 25},"Eligible","Not yet"))`]];
+  sheet.getRange(`A${summary + 17}`).values = [["Role granted (only if the SE volunteered)"]];
+  sheet.getRange(`A${summary + 19}`).values = [["QUALITATIVE FEEDBACK"]];
+  sheet.getRange(`A${summary + 20}`).values = [[config.feedbackLiked]];
+  sheet.getRange(`A${summary + 21}`).values = [["Things that need more attention"]];
+  sheet.getRange(`A${summary + 22}`).values = [["Additional feedback"]];
+  sheet.getRange(`A${summary + 24}`).values = [["TEMPLATE SETTINGS - for adapting; hide after adapting"]];
+  sheet.getRange(`A${summary + 25}`).values = [[config.settingsLabel]];
+  sheet.getRange(`C${summary + 25}`).values = [[valueGate]];
+}
+
 async function createWorkbook(rubric) {
   const totalWeight = (rubric.topics || []).reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
   if (totalWeight > 100) throw new Error("Topic weights cannot exceed 100%.");
@@ -433,7 +598,122 @@ async function applyExportPackageFixes(bytes) {
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
+async function createPocTemplateWorkbook(rubric) {
+  const config = trackConfigs.poc;
+  const totalWeight = (rubric.topics || []).reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
+  if (totalWeight > 100) throw new Error("Topic weights cannot exceed 100%.");
+
+  const sourceWorkbook = await SpreadsheetFile.importXlsx(await FileBlob.load(path.join(root, "src", "Demo Rubric Template.xlsx")));
+  const workbook = Workbook.create();
+  const sheet = workbook.worksheets.add("Rubric");
+  sheet.showGridLines = false;
+  const maxRows = 140;
+  sheet.getRange(`A1:A${maxRows}`).format.columnWidth = 44;
+  sheet.getRange(`B1:B${maxRows}`).format.columnWidth = 17.1796875;
+  sheet.getRange(`C1:C${maxRows}`).format.columnWidth = 16.08984375;
+  sheet.getRange(`D1:D${maxRows}`).format.columnWidth = 18;
+  sheet.getRange(`E1:E${maxRows}`).format.columnWidth = 44;
+  sheet.getRange(`A1:E${maxRows}`).format.font = workbookFont;
+  [27.75, 15, 9, 15, 15, 15, 15, 9, 19.5, 39.75, 39.75, 39.75, 39.75, 39.75, 9, 19.5, 15, 25.5, 25.5, 25.5, 25.5, 39.75, 39.75, 9, 19.5, 18].forEach((height, index) => {
+    sheet.getRange(`A${index + 1}:E${index + 1}`).format.rowHeight = height;
+  });
+
+  applyPocHeader(sheet, rubric, config);
+  ["A9:E9", "A16:E16", "A25:E25"].forEach((rangeAddress) => applySectionHeaderStyle(sheet, rangeAddress));
+  applyScoringLegendStyleAt(sheet, config, 16);
+  applyScoringTableHeader(sheet, 26);
+
+  let row = 27;
+  const scoreRows = [];
+  const unscoredRanges = [];
+  const valueCountFormulas = [];
+  const subtopicRows = [];
+  for (const [index, topic] of (rubric.topics || []).entries()) {
+    const subtopics = topic.subtopics || [];
+    const weight = Number(topic.weight) || 0;
+    sheet.getRange(`A${row}:E${row}`).merge();
+    sheet.getRange(`A${row}`).values = [[index === 2 ? `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight}) ◆ GATING - must score ≥ 60% (12/20)` : `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight})`]];
+    sheet.getRange(`A${row}:E${row}`).format.rowHeight = 21.75;
+    if (index === 2) {
+      sheet.getRange(`A${row}:E${row}`).format.fill = "#E1251B";
+      sheet.getRange(`A${row}:E${row}`).format.font = { ...workbookFont, size: 11, bold: true, color: "#FFFFFF" };
+    } else {
+      applyTopicBandStyle(sheet, row);
+    }
+    row += 1;
+
+    const start = row;
+    for (const item of subtopics) {
+      const subtopic = typeof item === "string" ? { name: item } : item;
+      const subtopicName = subtopic.name || "Evidence item";
+      sheet.getRange(`A${row}:E${row}`).values = [[subtopicName, "", null, null, null]];
+      sheet.getRange(`A${row}:E${row}`).format.rowHeight = Math.max(27, subtopicRowHeight(subtopicName));
+      sheet.getRange(`C${row}`).formulas = [[levelFormula(row, config)]];
+      sheet.getRange(`B${row}`).dataValidation = { rule: { type: "list", values: config.levels } };
+      subtopicRows.push(row);
+      row += 1;
+    }
+    const end = row - 1;
+    if (subtopics.length) unscoredRanges.push(`B${start}:B${end}`);
+
+    sheet.getRange(`A${row}:E${row}`).values = [[`▸ Topic ${index + 1} score (average x weight)`, null, null, "Notes:", null]];
+    sheet.getRange(`B${row}`).formulas = [[`=IFERROR(AVERAGE(C${start}:C${end})*${weight}/100,0)`]];
+    sheet.getRange(`B${row}`).format.numberFormat = `0.0" / ${weight}"`;
+    sheet.getRange(`A${row}:E${row}`).format.rowHeight = 18;
+    applyTopicScoreRowStyle(sheet, row);
+    scoreRows.push(row);
+    valueCountFormulas.push(`COUNTIF(C${start}:C${end},100)`);
+    row += 1;
+  }
+
+  const summary = row + 1;
+  [21.75, 9, 19.5, 15, 15, 9, 19.5, 39.75, 9, 19.5, 15, 21.75, 9, 19.5, 15, 15, 15, 15, 9, 19.5, 39.75, 39.75, 39.75, 9, 19.5, 15, 15, 15, 15].forEach((height, index) => {
+    sheet.getRange(`A${summary + index}:E${summary + index}`).format.rowHeight = height;
+  });
+  [2, 6, 7, 9, 11, 13, 19, 24].forEach((offset) => sheet.getRange(`A${summary + offset}:E${summary + offset}`).merge());
+  [3, 4, 10, 14, 15, 16, 20, 21, 22, 25].forEach((offset) => {
+    sheet.getRange(`A${summary + offset}:B${summary + offset}`).merge();
+    sheet.getRange(`C${summary + offset}:E${summary + offset}`).merge();
+  });
+  const unscoredFormula = unscoredRanges.map((range) => `COUNTBLANK(${range})`).join("+") || "0";
+  const valueCountFormula = valueCountFormulas.join("+") || "0";
+  writePocSummaryContent(sheet, summary, {
+    config,
+    scoreRows,
+    unscoredFormula,
+    valueCountFormula,
+    valueGate: Number(rubric.valueGate) || 0,
+    valueTopicCount: (rubric.topics || []).length,
+  });
+  [
+    `A${summary}:E${summary}`,
+    `A${summary + 2}:E${summary + 2}`,
+    `A${summary + 6}:E${summary + 6}`,
+    `A${summary + 9}:E${summary + 9}`,
+    `A${summary + 13}:E${summary + 13}`,
+    `A${summary + 19}:E${summary + 19}`,
+    `A${summary + 24}:E${summary + 24}`,
+  ].forEach((rangeAddress) => applySectionHeaderStyle(sheet, rangeAddress));
+  subtopicRows.forEach((subtopicRow) => applySubtopicRowStyle(sheet, subtopicRow));
+  applyPocSummaryBlockStyle(sheet, summary);
+
+  const verdictOptions = ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"];
+  const yesNoOptions = ["", "Yes", "No", "N/A"];
+  const roleOptions = ["", "-", "Validator", "Mentor"];
+  sheet.getRange(`A${summary + 7}`).dataValidation = { rule: { type: "list", values: verdictOptions } };
+  sheet.getRange(`C${summary + 15}`).dataValidation = { rule: { type: "list", values: yesNoOptions } };
+  sheet.getRange(`C${summary + 17}`).dataValidation = { rule: { type: "list", values: roleOptions } };
+
+  const adaptation = workbook.worksheets.add("How to adapt");
+  adaptation.getRange("A1:A26").format.columnWidth = 4;
+  adaptation.getRange("B1:B26").format.columnWidth = 112;
+  adaptation.getRange("A1:B26").copyFrom(sourceWorkbook.worksheets.getItem("How to adapt").getRange("A1:B26"), "all");
+  adaptation.getRange("A1:B26").format.font = workbookFont;
+  return workbook;
+}
+
 async function createTemplateWorkbook(rubric, track = "demo") {
+  if (track === "poc") return createPocTemplateWorkbook(rubric);
   const config = trackConfigs[track] || trackConfigs.demo;
   const totalWeight = (rubric.topics || []).reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
   if (totalWeight > 100) throw new Error("Topic weights cannot exceed 100%.");
