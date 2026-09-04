@@ -124,8 +124,13 @@ function cleanFilename(name) {
   return String(name || "rubric").replace(/[^a-z0-9-_ ]/gi, "").trim().replace(/ +/g, "-") || "rubric";
 }
 
-function applyHeaderSpec(sheet, rubric, config) {
+function productNameForExport(rubric, config) {
   const productName = String(rubric.name || "").trim();
+  return productName.toLowerCase() === config.title.toLowerCase() ? "" : productName;
+}
+
+function applyHeaderSpec(sheet, rubric, config) {
+  const productName = productNameForExport(rubric, config);
   const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
     ? productName
     : `${productName || "[Product]"} - ${config.title}`;
@@ -407,7 +412,7 @@ function writePitchSummaryContent(sheet, summary, context) {
 }
 
 function applyPocHeader(sheet, rubric, config) {
-  const productName = String(rubric.name || "").trim();
+  const productName = productNameForExport(rubric, config);
   const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
     ? productName
     : `${productName || "[Product]"} - ${config.title}`;
