@@ -7,7 +7,7 @@ import ExcelJS from "exceljs";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = 4173;
 const levels = ["", "Not shown", "Mentioned", "Shown: prompted", "Shown: independent", "Shown + value"];
-const workbookFont = { name: "Calibri", size: 9 };
+const workbookFont = { name: "Calibri", size: 9.5 };
 const formLabelFill = "#D9D9D9";
 const formInputFill = "#FFF2CC";
 const formBorder = "#666666";
@@ -1009,6 +1009,7 @@ function styleRange(ws, address, style) {
     if (style.alignment) cell.alignment = style.alignment;
     if (style.border) cell.border = style.border;
     if (style.numFmt) cell.numFmt = style.numFmt;
+    if (style.protection) cell.protection = style.protection;
   });
 }
 
@@ -1048,16 +1049,94 @@ function addValidation(cell, formula) {
   };
 }
 
+function inlineList(values) {
+  return `"${values.join(",")}"`;
+}
+
+function addListValidation(ws, refs, values) {
+  refs.filter(Boolean).forEach((range) => ws.dataValidations.add(range, {
+    type: "list",
+    allowBlank: true,
+    formulae: [inlineList(values)],
+    showErrorMessage: true,
+    errorTitle: "Invalid choice",
+    error: "Pick a value from the dropdown.",
+  }));
+}
+
+function unlock(ws, address) {
+  styleRange(ws, address, { protection: { locked: false } });
+}
+
+function lockUsedRange(ws, maxRow) {
+  styleRange(ws, `A1:E${maxRow}`, { protection: { locked: true } });
+}
+
+function applyStatusFormat(ws, ref, rules) {
+  ws.addConditionalFormatting({ ref, rules });
+}
+
+function publicSubtitle(config) {
+  return config.subtitle.replace(/\s*-\s*TEMPLATE$/i, "");
+}
+
+function fixedTopicForTrack(track) {
+  if (track === "demo") {
+    return {
+      name: "Narration quality & demo hygiene",
+      aliases: ["Narration & demo hygiene"],
+      weight: 15,
+      counts_to_value: false,
+      fixedFinal: true,
+      subtopics: ["Narration over GUI", "Clean presentation state", "Pacing quality"],
+    };
+  }
+  if (track === "pitch") {
+    return {
+      name: "Delivery & pacing",
+      aliases: [],
+      weight: 20,
+      counts_to_value: false,
+      fixedFinal: true,
+      subtopics: [
+        "Conversation balance - dialogue over monologue; invites and uses interaction",
+        "Pacing & time discipline - tight and energetic; earns its minutes",
+        "Structure & close - clear arc, punchy close, a natural next step",
+      ],
+    };
+  }
+  return null;
+}
+
+function exportTopicsForTrack(topics, track) {
+  const fixed = fixedTopicForTrack(track);
+  if (!fixed) return topics;
+  const fixedNames = [fixed.name, ...(fixed.aliases || [])].map((name) => name.toLowerCase());
+  const withoutFixed = (topics || []).filter((topic) => !fixedNames.includes(String(topic.name || "").trim().toLowerCase()));
+  return [...withoutFixed, fixed];
+}
+
+function validateRubric(topics) {
+  const totalWeight = topics.reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
+  if (totalWeight !== 100) throw new Error("Topic weights must total exactly 100%.");
+  const zeroWeight = topics.findIndex((topic) => (Number(topic.weight) || 0) <= 0);
+  if (zeroWeight >= 0) throw new Error(`Topic ${zeroWeight + 1} needs a weight greater than 0%.`);
+  const emptyTopic = topics.findIndex((topic) => !(topic.subtopics || []).length);
+  if (emptyTopic >= 0) throw new Error(`Topic ${emptyTopic + 1} needs at least one subtopic.`);
+}
+
 function writePublicHeader(ws, rubric, config, track) {
   const productName = productNameForExport(rubric, config);
-  const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
+  const title = !productName
+    ? config.title
+    : productName.toLowerCase().endsWith(config.title.toLowerCase())
     ? productName
     : `${productName || "[Product]"} - ${config.title}`;
 
   ws.mergeCells("A1:E1");
   ws.mergeCells("A2:E2");
   ws.getCell("A1").value = title;
-  ws.getCell("A2").value = config.subtitle;
+  ws.getCell("A2").value = publicSubtitle(config);
   ws.getCell("A1").font = font("#000000", { bold: true, size: 16 });
   ws.getCell("A2").font = font("#666666", { italic: true, size: 9.5 });
 
@@ -1149,7 +1228,7 @@ function writePublicTopic(ws, topic, index, row, config, levelList, isFlagship) 
   ws.mergeCells(`A${row}:E${row}`);
   const gateFloor = Math.ceil(weight * 0.6 * 10) / 10;
   ws.getCell(`A${row}`).value = isFlagship
-    ? `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight}) ◆ GATING - must score ≥ 60% (${gateFloor}/${weight})`
+    ? `${index + 1} -  ${String(topic.name || "Untitled topic").toUpperCase()} (weight ${weight}) ◆ GATING - must score ≥ 60%  (${gateFloor}/${weight})`
     : `${index + 1} - ${topic.name || "Untitled topic"} (weight ${weight})`;
   styleRange(ws, `A${row}:E${row}`, {
     fill: colorFill(isFlagship ? "#E1251B" : topicBandFill),
@@ -1162,11 +1241,10 @@ function writePublicTopic(ws, topic, index, row, config, levelList, isFlagship) 
     const subtopic = typeof item === "string" ? { name: item } : item;
     const name = subtopic.name || "Evidence item";
     ws.getCell(`A${row}`).value = name;
-    ws.getCell(`B${row}`).value = "";
+    ws.getCell(`B${row}`).value = null;
     ws.getCell(`C${row}`).value = { formula: scoreFormula(row, config) };
     ws.getCell(`A${row}`).alignment = { wrapText: true, vertical: "top" };
     ws.getCell(`B${row}`).fill = colorFill(formInputFill);
-    addValidation(ws.getCell(`B${row}`), levelList);
     ws.getRow(row).height = Math.max(18, subtopicRowHeight(name));
     borderRange(ws, `A${row}:E${row}`);
     row += 1;
@@ -1180,50 +1258,52 @@ function writePublicTopic(ws, topic, index, row, config, levelList, isFlagship) 
   styleRange(ws, `A${row}:B${row}`, { font: font("#000000", { bold: true }) });
   ws.getCell(`D${row}`).font = font("#000000", { bold: true });
   borderRange(ws, `A${row}:E${row}`);
-  return { nextRow: row + 1, scoreRow: row, subtopicRange: subtopics.length ? `B${start}:B${end}` : null, valueFormula: `COUNTIF(C${start}:C${end},100)`, weight };
+  return {
+    nextRow: row + 1,
+    scoreRow: row,
+    subtopicInputRange: subtopics.length ? `B${start}:B${end}` : null,
+    subtopicPercentRange: subtopics.length ? `C${start}:C${end}` : null,
+    notesCell: `E${row}`,
+    valueFormula: `IF(COUNTIF(C${start}:C${end},100)>0,1,0)`,
+    weight,
+  };
 }
 
 function writePublicSummary(ws, summary, track, config, context, lists) {
-  const { scoreRows, scoreWeights, unscoredFormula, valueCountFormula, valueGate, valueTopicCount, flagshipIndex } = context;
+  const { scoreRows, subtopicPercentRanges, unscoredFormula, valueCountFormula, valueGate, valueTopicCount, flagshipIndex } = context;
   const isPitch = track === "pitch";
   const isPoc = track === "poc";
-  sectionHeader(ws, `A${summary}:E${summary}`, "TOTAL SCORE");
-  ws.getCell(`C${summary}`).value = { formula: `SUM(${scoreRows.map((row) => `B${row}`).join(",") || "0"})` };
+  styleRange(ws, `A${summary}:E${summary}`, {
+    fill: colorFill("#000000"),
+    font: font("#FFFFFF", { bold: true, size: 11 }),
+    alignment: { vertical: "middle" },
+    border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray },
+  });
+  ws.getCell(`A${summary}`).value = "TOTAL SCORE";
+  ws.getCell(`C${summary}`).value = { formula: scoreRows.map((row) => `B${row}`).join("+") || "0" };
   ws.getCell(`C${summary}`).numFmt = '0.0" / 100"';
 
   sectionHeader(ws, `A${summary + 2}:E${summary + 2}`, "SCORE SUMMARY - reference signals for your verdict");
   ws.getCell(`A${summary + 3}`).value = "Unscored subtopics remaining";
   ws.getCell(`C${summary + 3}`).value = { formula: unscoredFormula };
   ws.getCell(`A${summary + 4}`).value = isPitch ? "Discovery & qualification signal (flagship)" : isPoc ? "Flagship topic signal (floor 60%)" : "[Flagship topic] signal (optional - repoint or delete)";
-  const flagshipRow = flagshipIndex >= 0 ? scoreRows[flagshipIndex] : scoreRows[Math.min(2, scoreRows.length - 1)];
-  const flagshipWeight = flagshipIndex >= 0 ? scoreWeights[flagshipIndex] : null;
-  ws.getCell(`C${summary + 4}`).value = isPoc && flagshipWeight
-    ? { formula: `IF(C${summary + 3}>0,"—",B${flagshipRow}/${flagshipWeight})` }
-    : { formula: `IF(C${summary + 3}>0,"—",B${flagshipRow || 1})` };
-  if (isPoc) {
-    ws.getCell(`C${summary + 4}`).numFmt = "0.0%";
-    ws.addConditionalFormatting({
-      ref: `C${summary + 4}:E${summary + 4}`,
-      rules: [
-        { type: "cellIs", priority: 1, operator: "lessThan", formulae: ["0.6"], style: { fill: colorFill("#E1251B"), font: { color: { argb: "FFFFFFFF" }, bold: true } } },
-        { type: "cellIs", priority: 2, operator: "greaterThanOrEqual", formulae: ["0.6"], style: { fill: colorFill("#0B7A34"), font: { color: { argb: "FFFFFFFF" }, bold: true } } },
-      ],
-    });
-  }
+  const flagshipRange = flagshipIndex >= 0 ? subtopicPercentRanges[flagshipIndex] : subtopicPercentRanges[0];
+  ws.getCell(`C${summary + 4}`).value = flagshipRange
+    ? { formula: `IF(C${summary + 3}>0,"—",IFERROR(AVERAGE(${flagshipRange}),0))` }
+    : "—";
+  ws.getCell(`C${summary + 4}`).numFmt = '0"%"';
 
   const layer1Row = isPitch ? summary + 12 : summary + 6;
   const layer1Input = layer1Row + 1;
   sectionHeader(ws, `A${layer1Row}:E${layer1Row}`, "LAYER 1 - COMPETENCY (validator's judgment - use the signals above and pick one)");
   ws.mergeCells(`A${layer1Input}:E${layer1Input}`);
   styleRange(ws, `A${layer1Input}:E${layer1Input}`, { fill: colorFill(formInputFill), border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray } });
-  addValidation(ws.getCell(`A${layer1Input}`), lists.verdict);
 
   if (isPitch) {
     sectionHeader(ws, `A${summary + 6}:E${summary + 6}`, "EVALUATOR-RATED SIGNALS (your judgment - rate both before the verdict)");
     [["Was the presentation compelling?", lists.compelling, 7], ["Was the presentation accurate?", lists.accurate, 9]].forEach(([label, list, offset]) => {
       ws.getCell(`A${summary + offset}`).value = label;
       ws.getCell(`C${summary + offset}`).fill = colorFill(formInputFill);
-      addValidation(ws.getCell(`C${summary + offset}`), list);
       borderRange(ws, `A${summary + offset}:E${summary + offset}`);
     });
   }
@@ -1234,7 +1314,8 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   sectionHeader(ws, `A${layer2Row}:E${layer2Row}`, config.layer2Header);
   ws.getCell(`A${countRow}`).value = `${config.valueCountLabel}${isPitch || isPoc ? ` (of ${valueTopicCount})` : ""}`;
   ws.getCell(`C${countRow}`).value = { formula: valueCountFormula };
-  ws.getCell(`A${gateRow}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=C${settingsValueRow(summary, track)},"${config.gateMet}","${config.gateNotMet}"))` };
+  ws.mergeCells(`A${gateRow}:E${gateRow}`);
+  ws.getCell(`A${gateRow}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=$C$${settingsValueRow(summary, track)},"${config.gateMet}","${config.gateNotMet}"))` };
 
   const decisionsRow = isPitch ? summary + 19 : summary + 13;
   sectionHeader(ws, `A${decisionsRow}:E${decisionsRow}`, "VALIDATOR DECISIONS");
@@ -1250,9 +1331,7 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
     ws.getCell(`A${row}`).font = font("#000000", { bold: true });
     ws.mergeCells(`C${row}:E${row}`);
     if (index === 0) ws.getCell(`C${row}`).value = { formula: `IF(A${layer1Input}="","—",IF(A${layer1Input}="Competency met","Yes","No"))` };
-    if (label.includes("(automatic)")) ws.getCell(`C${row}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=C${settingsValueRow(summary, track)},"Eligible","Not yet"))` };
-    if (index === decisionLabels.length - 1) addValidation(ws.getCell(`C${row}`), lists.role);
-    if (index > 0 && !label.includes("(automatic)") && index !== decisionLabels.length - 1) addValidation(ws.getCell(`C${row}`), lists.yesNo);
+    if (label.includes("(automatic)")) ws.getCell(`C${row}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=$C$${settingsValueRow(summary, track)},"Eligible","Not yet"))` };
     ws.getCell(`C${row}`).fill = colorFill(index === 0 || label.includes("(automatic)") ? "#FFFFFF" : formInputFill);
     borderRange(ws, `A${row}:E${row}`);
   });
@@ -1278,17 +1357,77 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   ws.getCell(`C${settingsRow + 1}`).value = valueGate;
   borderRange(ws, `A${settingsRow + 1}:C${settingsRow + 1}`);
   borderRange(ws, `A${summary}:E${settingsRow + 1}`);
+  return {
+    layer1Input: `A${layer1Input}`,
+    unscoredCell: `C${summary + 3}`,
+    flagshipCell: `C${summary + 4}`,
+    gateCell: `A${gateRow}`,
+    passingCell: `C${decisionsRow + 1}`,
+    roleCell: `C${decisionsRow + decisionLabels.length}`,
+    eligibleCell: `C${decisionsRow + decisionLabels.findIndex((label) => label.includes("(automatic)")) + 1}`,
+    curveballCell: `C${decisionsRow + 2}`,
+    pitchCompellingCell: isPitch ? `C${summary + 7}` : null,
+    pitchAccurateCell: isPitch ? `C${summary + 9}` : null,
+    feedbackRange: `C${feedbackRow + 1}:E${feedbackRow + 3}`,
+    settingsCell: `C${settingsRow + 1}`,
+    maxRow: settingsRow + 1,
+  };
 }
 
 function settingsValueRow(summary, track) {
   return track === "pitch" ? summary + 33 : summary + 25;
 }
 
+function cfStyle(fill, color) {
+  return { fill: colorFill(fill), font: { color: { argb: `FF${color}` }, bold: true } };
+}
+
+function applySpecConditionalFormatting(ws, cells) {
+  applyStatusFormat(ws, cells.unscoredCell, [
+    { type: "cellIs", priority: 1, operator: "greaterThan", formulae: ["0"], style: cfStyle("#FFCDD2", "B71C1C") },
+    { type: "cellIs", priority: 2, operator: "equal", formulae: ["0"], style: cfStyle("#C8E6C9", "1B5E20") },
+  ]);
+  applyStatusFormat(ws, cells.flagshipCell, [
+    { type: "expression", priority: 3, formulae: [`AND(ISNUMBER(${cells.flagshipCell}),${cells.flagshipCell}>=60)`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 4, formulae: [`AND(ISNUMBER(${cells.flagshipCell}),${cells.flagshipCell}<60)`], style: cfStyle("#FFCDD2", "B71C1C") },
+  ]);
+  applyStatusFormat(ws, cells.layer1Input, [
+    { type: "expression", priority: 5, formulae: [`${cells.layer1Input}="Competency met"`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 6, formulae: [`ISNUMBER(SEARCH("Targeted",${cells.layer1Input}))`], style: cfStyle("#FFE0B2", "7A4F01") },
+    { type: "expression", priority: 7, formulae: [`ISNUMBER(SEARCH("Full",${cells.layer1Input}))`], style: cfStyle("#FFCDD2", "B71C1C") },
+  ]);
+  applyStatusFormat(ws, cells.gateCell, [
+    { type: "expression", priority: 8, formulae: [`AND(ISNUMBER(SEARCH("MET",${cells.gateCell})),NOT(ISNUMBER(SEARCH("NOT met",${cells.gateCell}))))`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 9, formulae: [`ISNUMBER(SEARCH("NOT met",${cells.gateCell}))`], style: cfStyle("#FFE0B2", "7A4F01") },
+  ]);
+  applyStatusFormat(ws, cells.passingCell, [
+    { type: "expression", priority: 10, formulae: [`${cells.passingCell}="Yes"`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 11, formulae: [`${cells.passingCell}="No"`], style: cfStyle("#FFCDD2", "B71C1C") },
+  ]);
+  applyStatusFormat(ws, cells.eligibleCell, [
+    { type: "expression", priority: 12, formulae: [`${cells.eligibleCell}="Eligible"`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 13, formulae: [`${cells.eligibleCell}="Not yet"`], style: cfStyle("#FFE0B2", "7A4F01") },
+  ]);
+  if (cells.pitchCompellingCell) {
+    applyStatusFormat(ws, cells.pitchCompellingCell, [
+      { type: "expression", priority: 14, formulae: [`OR(LEFT(${cells.pitchCompellingCell},1)="4",LEFT(${cells.pitchCompellingCell},1)="5")`], style: cfStyle("#C8E6C9", "1B5E20") },
+      { type: "expression", priority: 15, formulae: [`LEFT(${cells.pitchCompellingCell},1)="3"`], style: cfStyle("#FFE0B2", "7A4F01") },
+      { type: "expression", priority: 16, formulae: [`OR(LEFT(${cells.pitchCompellingCell},1)="1",LEFT(${cells.pitchCompellingCell},1)="2")`], style: cfStyle("#FFCDD2", "B71C1C") },
+    ]);
+  }
+  if (cells.pitchAccurateCell) {
+    applyStatusFormat(ws, cells.pitchAccurateCell, [
+      { type: "expression", priority: 17, formulae: [`OR(LEFT(${cells.pitchAccurateCell},1)="3",LEFT(${cells.pitchAccurateCell},1)="4")`], style: cfStyle("#C8E6C9", "1B5E20") },
+      { type: "expression", priority: 18, formulae: [`LEFT(${cells.pitchAccurateCell},1)="2"`], style: cfStyle("#FFE0B2", "7A4F01") },
+      { type: "expression", priority: 19, formulae: [`LEFT(${cells.pitchAccurateCell},1)="1"`], style: cfStyle("#FFCDD2", "B71C1C") },
+    ]);
+  }
+}
+
 async function createPublicWorkbook(rubric, track = "demo") {
   const config = trackConfigs[track] || trackConfigs.demo;
-  const topics = rubric.topics || [];
-  const totalWeight = topics.reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
-  if (totalWeight > 100) throw new Error("Topic weights cannot exceed 100%.");
+  const topics = exportTopicsForTrack(rubric.topics || [], track);
+  validateRubric(topics);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "Rubric Builder";
@@ -1296,16 +1435,13 @@ async function createPublicWorkbook(rubric, track = "demo") {
   const ws = wb.addWorksheet("Rubric", { views: [{ showGridLines: false }] });
   ws.columns = [{ width: 44 }, { width: 17.18 }, { width: 16.09 }, { width: 18 }, { width: 44 }];
   ws.eachRow((row) => { row.font = font(); });
-
-  const lists = wb.addWorksheet("Validation Lists");
-  lists.state = "veryHidden";
-  const listRefs = {
-    levels: listFormula(lists, "levels", config.levels),
-    verdict: listFormula(lists, "verdict", ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"]),
-    yesNo: listFormula(lists, "yesNo", ["", "Yes", "No", "N/A"]),
-    role: listFormula(lists, "role", ["", "-", "Validator", "Mentor"]),
-    compelling: listFormula(lists, "compelling", ["", "1 - Would seek alternative vendors", "2 - Doubts about the solution", "3 - Likely to continue with Fortinet", "4 - Unlikely to consider other vendors", "5 - Will move forward with Fortinet"]),
-    accurate: listFormula(lists, "accurate", ["", "1 - Misrepresented the product", "2 - Accurate but FAB unclear", "3 - Accurate; FAB satisfactorily conveyed", "4 - Accurate; FAB insightful and robust"]),
+  const listValues = {
+    levels: config.levels,
+    verdict: ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"],
+    curveball: track === "pitch" ? ["", "Yes", "No", "N/A - none arose"] : ["", "Yes", "No", "N/A - none occurred"],
+    role: ["", "-", "Validator", "Mentor"],
+    compelling: ["", "1 - Would seek alternative vendors", "2 - Doubts about the solution", "3 - Likely to continue with Fortinet", "4 - Unlikely to consider other vendors", "5 - Will move forward with Fortinet"],
+    accurate: ["", "1 - Misrepresented the product", "2 - Accurate but FAB unclear", "3 - Accurate; FAB satisfactorily conveyed", "4 - Accurate; FAB insightful and robust"],
   };
 
   writePublicHeader(ws, rubric, config, track);
@@ -1316,31 +1452,59 @@ async function createPublicWorkbook(rubric, track = "demo") {
 
   let row = isPoc ? 27 : 24;
   const scoreRows = [];
-  const scoreWeights = [];
   const unscoredRanges = [];
+  const subtopicPercentRanges = [];
+  const levelValidationRanges = [];
+  const notesCells = [];
   const valueCountFormulas = [];
   const flaggedIndex = flagshipTopicIndex(topics);
   topics.forEach((topic, index) => {
-    const result = writePublicTopic(ws, topic, index, row, config, listRefs.levels, index === flaggedIndex);
+    const result = writePublicTopic(ws, topic, index, row, config, null, index === flaggedIndex);
     row = result.nextRow;
     scoreRows.push(result.scoreRow);
-    scoreWeights.push(result.weight);
-    if (result.subtopicRange) unscoredRanges.push(result.subtopicRange);
-    if (!(config.excludeFinalTopicFromGate && index === topics.length - 1)) valueCountFormulas.push(result.valueFormula);
+    if (result.subtopicInputRange) {
+      unscoredRanges.push(result.subtopicInputRange);
+      levelValidationRanges.push(result.subtopicInputRange);
+    }
+    if (result.subtopicPercentRange) subtopicPercentRanges.push(result.subtopicPercentRange);
+    if (result.notesCell) notesCells.push(result.notesCell);
+    if (topic.counts_to_value !== false && !topic.fixedFinal) valueCountFormulas.push(result.valueFormula);
   });
 
   const summary = row + 1;
-  writePublicSummary(ws, summary, track, config, {
+  const summaryCells = writePublicSummary(ws, summary, track, config, {
     scoreRows,
-    scoreWeights,
+    subtopicPercentRanges,
     unscoredFormula: unscoredRanges.map((range) => `COUNTBLANK(${range})`).join("+") || "0",
     valueCountFormula: valueCountFormulas.join("+") || "0",
     valueGate: Number(rubric.valueGate) || 0,
-    valueTopicCount: config.excludeFinalTopicFromGate ? Math.max(0, topics.length - 1) : topics.length,
+    valueTopicCount: topics.filter((topic) => topic.counts_to_value !== false && !topic.fixedFinal).length,
     flagshipIndex: flaggedIndex,
-  }, listRefs);
+  }, listValues);
 
-  wb.addWorksheet("How to adapt").getCell("A1").value = "Use the browser builder to edit topics, subtopics, weights, and the flagship marker. Export a fresh workbook after changes.";
+  addListValidation(ws, levelValidationRanges, listValues.levels);
+  addListValidation(ws, [summaryCells.layer1Input], listValues.verdict);
+  addListValidation(ws, [summaryCells.curveballCell], listValues.curveball);
+  addListValidation(ws, [summaryCells.roleCell], listValues.role);
+  addListValidation(ws, [summaryCells.pitchCompellingCell], listValues.compelling);
+  addListValidation(ws, [summaryCells.pitchAccurateCell], listValues.accurate);
+  applySpecConditionalFormatting(ws, summaryCells);
+  lockUsedRange(ws, summaryCells.maxRow);
+  ["B4", "D4", "B5", "D5", "B6", ...levelValidationRanges, ...notesCells, summaryCells.layer1Input, summaryCells.curveballCell, summaryCells.roleCell, summaryCells.feedbackRange, summaryCells.pitchCompellingCell, summaryCells.pitchAccurateCell].filter(Boolean).forEach((address) => unlock(ws, address));
+  await ws.protect("", {
+    selectLockedCells: false,
+    selectUnlockedCells: true,
+    formatCells: false,
+    formatColumns: false,
+    formatRows: false,
+    insertColumns: false,
+    insertRows: false,
+    deleteColumns: false,
+    deleteRows: false,
+    sort: false,
+    autoFilter: false,
+    pivotTables: false,
+  });
   return wb;
 }
 
@@ -1374,7 +1538,13 @@ createServer(async (request, response) => {
     });
     response.end(bytes);
   } catch (error) {
-    const status = error.message === "Topic weights cannot exceed 100%." ? 400 : 500;
+    console.error(error);
+    const status = [
+      "Topic weights cannot exceed 100%.",
+      "Topic weights must total exactly 100%.",
+      "needs a weight greater than 0%",
+      "needs at least one subtopic",
+    ].some((message) => error.message.includes(message)) ? 400 : 500;
     response.writeHead(status, { "Content-Type": "application/json" });
     response.end(JSON.stringify({ error: error.message }));
   }

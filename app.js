@@ -14,7 +14,7 @@ const sample = {
     { name: "Core capabilities", weight: 15, subtopics: ["Demonstrate a central capability", "Handle a common use case"] },
     { name: "Visibility & reporting", weight: 10, subtopics: ["Show meaningful reporting", "Connect it to a decision"] },
     { name: "Operational awareness", weight: 10, subtopics: ["Recover from a demo interruption", "Explain operational guardrails"] },
-    { name: "Narration & demo hygiene", weight: 15, subtopics: ["Narrate the why, not just the clicks", "Keep a clean presentation state", "Maintain an effective pace"] }
+    { name: "Narration quality & demo hygiene", weight: 15, subtopics: ["Narration over GUI", "Clean presentation state", "Pacing quality"] }
   ]
 };
 
@@ -198,6 +198,7 @@ function updateWeightStatus() {
   weightStatus.classList.toggle("invalid", weightTotal !== 100);
   document.querySelector("#side-weight-total").textContent = weightTotal;
   const overLimit = weightTotal > 100;
+  const balanced = weightTotal === 100;
   const exportReady = trackMeta[activeTrack].exportReady;
   const sideOrb = document.querySelector(".weight-orb");
   const sideMessage = document.querySelector("#side-weight-message");
@@ -208,7 +209,7 @@ function updateWeightStatus() {
     : weightTotal === 100
     ? "Perfect. Every topic is contributing to a complete 100-point rubric."
     : `Your topics total ${weightTotal}%. Adjust them by ${Math.abs(100 - weightTotal)}% to balance the rubric.`;
-  document.querySelector("#export-button").disabled = overLimit || !exportReady;
+  document.querySelector("#export-button").disabled = !balanced || !exportReady;
   document.querySelector("#topic-count").textContent = rubric.topics.length;
   document.querySelector("#subtopic-count").textContent = rubric.topics.reduce((total, topic) => total + topic.subtopics.length, 0);
   document.querySelector("#side-value-gate").textContent = `${rubric.valueGate} ${rubric.valueGate === 1 ? "topic" : "topics"}`;
