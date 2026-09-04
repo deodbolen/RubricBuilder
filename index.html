@@ -23,12 +23,20 @@
         </div>
       </header>
 
+      <nav class="track-tabs" aria-label="Rubric type">
+        <button class="track-tab active" type="button" data-track="demo">Demo</button>
+        <button class="track-tab" type="button" data-track="pitch">Pitch</button>
+        <button class="track-tab" type="button" data-track="poc">POC</button>
+      </nav>
+
+      <div class="track-note" id="track-note" hidden></div>
+
       <section class="setup-card">
-        <label>
+        <label for="rubric-name">
           <span>Product / rubric name</span>
           <input id="rubric-name" type="text" placeholder="e.g. Console demo validation" />
         </label>
-        <label>
+        <label for="value-gate">
           <span>Value-tied topics required</span>
           <input id="value-gate" type="number" min="0" step="1" />
         </label>

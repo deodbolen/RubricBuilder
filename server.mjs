@@ -17,18 +17,87 @@ const sectionHeaderFill = "#000000";
 const tableHeaderFill = "#262626";
 const topicBandFill = "#595959";
 const tableBorder = "#B7B7B7";
+const trackConfigs = {
+  demo: {
+    title: "Demo Validation Rubric",
+    subtitle: "Competency Validation Program - Demo Track - TEMPLATE",
+    levels: ["", "Not shown", "Mentioned", "Shown: prompted", "Shown: independent", "Shown + value"],
+    percentMap: [
+      ["Not shown", 0],
+      ["Mentioned", 25],
+      ["Shown: prompted", 50],
+      ["Shown: independent", 75],
+      ["Shown + value", 100],
+    ],
+    instructions: [
+      "•  During the demo, do one thing per subtopic: pick one level from the dropdown.",
+      "•  Blank = not yet scored (it won't count). To score a zero, pick \"Not shown\". The Unscored counter below flags anything missed.",
+      "•  The top level is reserved for customer value.  Clean, unprompted execution reaches \"Shown: independent\" (75%); tying it to a customer outcome earns \"Shown + value\" (100%).",
+      "•  If this product has a flagship topic, treat its score as a serious signal - not a switch - when you make your verdict.",
+    ],
+    levelDescriptions: [
+      ["Not shown", 0, "Neither demonstrated nor mentioned. Absent from the demo."],
+      ["Mentioned", 25, "Referred to verbally but not demonstrated when it was demonstrable."],
+      ["Shown: prompted", 50, "Demonstrated only after being asked or reminded, or with help locating or executing it."],
+      ["Shown: independent", 75, "Demonstrated competently, unprompted, start to finish - but customer value was not tied in."],
+      ["Shown + value", 100, "Everything in \"independent\", plus an explicit tie-in to a customer outcome, business case, or use case."],
+    ],
+    finalTopicNote: "Final topic (Narration quality & demo hygiene) only: read the five levels as quality bands--Absent (0) / Poor (25) / Adequate (50) / Strong (75) / Exemplary (100). It does not count toward the value gate.",
+    layer2Header: "VALUE TIED-IN (automatic; validator/mentor eligibility)",
+    valueCountLabel: "Topics with value tied",
+    gateMet: "Value gate MET - strong pass; eligible for nomination",
+    gateNotMet: "Value gate NOT met - value-tying is the development area; not yet endorsed",
+    settingsLabel: "Value-gate minimum (number of topics)",
+    feedbackLiked: "Things I liked about the demo",
+    excludeFinalTopicFromGate: false,
+  },
+  pitch: {
+    title: "Pitch Validation Rubric",
+    subtitle: "Competency Validation Program - Pitch Track - TEMPLATE",
+    levels: ["", "Not addressed", "Mentioned", "Pitched: prompted", "Pitched: fluent", "Pitched + tailored"],
+    percentMap: [
+      ["Not addressed", 0],
+      ["Mentioned", 25],
+      ["Pitched: prompted", 50],
+      ["Pitched: fluent", 75],
+      ["Pitched + tailored", 100],
+    ],
+    instructions: [
+      "•  During the pitch, do one thing per subtopic: pick one level from the dropdown.",
+      "•  Blank = not yet scored (it won't count). To score a zero, pick \"Not addressed\". The Unscored counter below flags anything missed.",
+      "•  The top level is reserved for tailoring.  Fluent, accurate, unprompted coverage reaches \"Pitched: fluent\" (75%). The final 25% is earned only by connecting the point to what THIS customer said - their discovery answers, environment, or stated pain.",
+      "•  If this product has a flagship topic, treat its score as a serious signal - not a switch - when you make your verdict.",
+    ],
+    levelDescriptions: [
+      ["Not addressed", 0, "Absent from the pitch entirely."],
+      ["Mentioned", 25, "Named in passing without substance - when it warranted real treatment."],
+      ["Pitched: prompted", 50, "Covered with substance, but only after the evaluator asked or had to steer the conversation to it."],
+      ["Pitched: fluent", 75, "Covered accurately, confidently, unprompted - but generically; not connected to this customer."],
+      ["Pitched + tailored", 100, "Everything in \"fluent\", plus explicitly tied to the audience - their discovery answers, environment, or stated pain."],
+    ],
+    finalTopicNote: "Final topic (Delivery & pacing) only: read the five levels as quality bands - Absent (0) / Poor (25) / Adequate (50) / Strong (75) / Exemplary (100). It does not count toward the tailoring gate.",
+    layer2Header: "LAYER 2 - TAILORING (automatic)",
+    valueCountLabel: "Topics tailored",
+    gateMet: "Tailoring gate MET - strong pass; eligible for nomination",
+    gateNotMet: "Tailoring gate NOT met - tailor more points to this customer",
+    settingsLabel: "Tailoring-gate minimum (number of topics)",
+    feedbackLiked: "Things I liked about the pitch",
+    excludeFinalTopicFromGate: true,
+  },
+};
 
 function cleanFilename(name) {
   return String(name || "rubric").replace(/[^a-z0-9-_ ]/gi, "").trim().replace(/ +/g, "-") || "rubric";
 }
 
-function applyHeaderSpec(sheet, rubric) {
+function applyHeaderSpec(sheet, rubric, config) {
   const productName = String(rubric.name || "").trim();
-  const title = productName.toLowerCase().endsWith("demo validation rubric")
+  const title = productName.toLowerCase().endsWith(config.title.toLowerCase())
     ? productName
-    : `${productName || "[Product]"} - Demo Validation Rubric`;
+    : `${productName || "[Product]"} - ${config.title}`;
   ["D4:E4", "D5:E5"].forEach((address) => sheet.getRange(address).unmerge());
   sheet.getRange("A1").values = [[title]];
+  sheet.getRange("A2").values = [[config.subtitle]];
   sheet.getRange("A1").format.font = { ...workbookFont, size: 16, bold: true };
   sheet.getRange("A2").format.font = { ...workbookFont, size: 9, italic: true };
 
@@ -40,6 +109,12 @@ function applyHeaderSpec(sheet, rubric) {
   sheet.getRange("B4").values = [[""]];
   sheet.getRange("D4").values = [[""]];
   sheet.getRange("D5").values = [[""]];
+  sheet.getRange("A7").values = [["HOW TO USE"]];
+  ["A8", "A9", "A10", "A11"].forEach((address, index) => {
+    sheet.getRange(address).values = [[config.instructions[index] || ""]];
+  });
+  sheet.getRange("A13").values = [["SCORING LEVELS EXPLAINED - the same five apply to every subtopic"]];
+  sheet.getRange("A22").values = [["SCORING"]];
 
   ["A4", "C4", "A5", "C5"].forEach((address) => {
     const range = sheet.getRange(address);
@@ -74,15 +149,31 @@ function applyTableBorders(sheet, rangeAddress) {
   sheet.getRange(rangeAddress).format.borders = { preset: "all", style: "thin", color: tableBorder };
 }
 
-function applyScoringLegendStyle(sheet) {
+function applyScoringLegendStyle(sheet, config) {
   sheet.getRange("A14").values = [["Level"]];
   sheet.getRange("B14").values = [["%"]];
   sheet.getRange("C14").values = [["What it means"]];
+  sheet.getRange("A15:C19").values = config.levelDescriptions;
+  sheet.getRange("A20").values = [[config.finalTopicNote]];
   sheet.getRange("A14:E14").format.fill = tableHeaderFill;
   sheet.getRange("A14:E14").format.font = { ...workbookFont, bold: true, color: "#FFFFFF" };
   applyTableBorders(sheet, "A14:E20");
   sheet.getRange("A15:A19").format.font = { ...workbookFont, bold: true };
   sheet.getRange("B15:B19").format.font = { ...workbookFont, bold: true, color: "#FF0000" };
+}
+
+function levelFormula(row, config) {
+  const [, first, second, third, fourth, fifth] = config.levels;
+  return `=IF($B${row}="${fifth}",100,IF($B${row}="${fourth}",75,IF($B${row}="${third}",50,IF($B${row}="${second}",25,IF($B${row}="${first}",0,"")))))`;
+}
+
+function subtopicRowHeight(text) {
+  const length = String(text || "").length;
+  if (length > 150) return 49.5;
+  if (length > 105) return 39.75;
+  if (length > 70) return 30;
+  if (length > 48) return 24;
+  return 16.5;
 }
 
 function applyScoringTableHeader(sheet, row) {
@@ -102,6 +193,8 @@ function applyTopicBandStyle(sheet, row) {
 
 function applySubtopicRowStyle(sheet, row) {
   applyTableBorders(sheet, `A${row}:E${row}`);
+  sheet.getRange(`A${row}`).format.wrapText = true;
+  sheet.getRange(`A${row}`).format.verticalAlignment = "top";
   sheet.getRange(`B${row}`).format.fill = formInputFill;
 }
 
@@ -144,6 +237,121 @@ function applySummaryBlockStyle(sheet, summary) {
   ].forEach((rangeAddress) => {
     sheet.getRange(rangeAddress).format.fill = "#FFFFFF";
   });
+}
+
+function applyPitchSummaryBlockStyle(sheet, summary) {
+  applyTableBorders(sheet, `A${summary}:E${summary + 34}`);
+  [
+    `A${summary + 3}:B${summary + 4}`,
+    `A${summary + 7}:B${summary + 7}`,
+    `A${summary + 9}:B${summary + 9}`,
+    `A${summary + 16}:B${summary + 16}`,
+    `A${summary + 20}:B${summary + 24}`,
+    `A${summary + 27}:B${summary + 29}`,
+    `A${summary + 33}:B${summary + 33}`,
+  ].forEach((rangeAddress) => {
+    const range = sheet.getRange(rangeAddress);
+    range.format.fill = formLabelFill;
+    range.format.font = { ...workbookFont, bold: true };
+  });
+  sheet.getRange(`A${summary + 4}:B${summary + 4}`).format.font = { ...workbookFont, bold: true, color: "#FF0000" };
+  sheet.getRange(`C${summary + 3}:E${summary + 3}`).format.fill = "#F4CCCC";
+  [
+    `C${summary + 7}:E${summary + 7}`,
+    `C${summary + 9}:E${summary + 9}`,
+    `A${summary + 13}:E${summary + 13}`,
+    `C${summary + 21}:E${summary + 22}`,
+    `C${summary + 24}:E${summary + 24}`,
+    `C${summary + 27}:E${summary + 29}`,
+  ].forEach((rangeAddress) => {
+    sheet.getRange(rangeAddress).format.fill = formInputFill;
+  });
+  [
+    `C${summary + 4}:E${summary + 4}`,
+    `A${summary + 8}:E${summary + 8}`,
+    `A${summary + 10}:E${summary + 10}`,
+    `A${summary + 17}:E${summary + 17}`,
+    `C${summary + 20}:E${summary + 20}`,
+    `C${summary + 23}:E${summary + 23}`,
+    `C${summary + 33}:E${summary + 33}`,
+  ].forEach((rangeAddress) => {
+    sheet.getRange(rangeAddress).format.fill = "#FFFFFF";
+  });
+  [`A${summary + 8}:E${summary + 8}`, `A${summary + 10}:E${summary + 10}`].forEach((rangeAddress) => {
+    sheet.getRange(rangeAddress).format.font = { ...workbookFont, italic: true, color: "#666666" };
+  });
+}
+
+function writeDemoSummaryContent(sheet, summary, context) {
+  const { config, scoreRows, unscoredFormula, valueCountFormula, valueGate } = context;
+  sheet.getRange(`A${summary}`).values = [["TOTAL SCORE"]];
+  sheet.getRange(`A${summary + 2}`).values = [["SCORE SUMMARY - reference signals for your verdict"]];
+  sheet.getRange(`A${summary + 3}`).values = [["Unscored subtopics remaining"]];
+  sheet.getRange(`A${summary + 4}`).values = [["[Flagship topic] signal (optional - repoint or delete)"]];
+  sheet.getRange(`A${summary + 6}`).values = [["VERDICT (pick your verdict)"]];
+  sheet.getRange(`A${summary + 9}`).values = [[config.layer2Header]];
+  sheet.getRange(`A${summary + 10}`).values = [[config.valueCountLabel]];
+  sheet.getRange(`A${summary + 13}`).values = [["VALIDATOR DECISIONS"]];
+  sheet.getRange(`A${summary + 14}`).values = [["Passing grade"]];
+  sheet.getRange(`A${summary + 15}`).values = [["Did the presenter handle a curveball globally?"]];
+  sheet.getRange(`A${summary + 16}`).values = [["Is the presenter eligible to grade others on this product? (automatic)"]];
+  sheet.getRange(`A${summary + 17}`).values = [["Role granted (only if the presenter volunteered)"]];
+  sheet.getRange(`A${summary + 19}`).values = [["QUALITATIVE FEEDBACK"]];
+  sheet.getRange(`A${summary + 20}`).values = [[config.feedbackLiked]];
+  sheet.getRange(`A${summary + 21}`).values = [["Things that need more attention"]];
+  sheet.getRange(`A${summary + 22}`).values = [["Additional feedback"]];
+  sheet.getRange(`A${summary + 24}`).values = [["TEMPLATE SETTINGS - for adapting; leave alone while grading"]];
+  sheet.getRange(`A${summary + 25}`).values = [[config.settingsLabel]];
+  sheet.getRange(`C${summary}`).formulas = [[`=SUM(${scoreRows.map((scoreRow) => `B${scoreRow}`).join(",") || "0"})`]];
+  sheet.getRange(`C${summary}`).format.numberFormat = '0.0" / 100"';
+  sheet.getRange(`C${summary + 3}`).formulas = [[`=${unscoredFormula}`]];
+  sheet.getRange(`C${summary + 4}`).formulas = [[`=IF(C${summary + 3}>0,"—",B${scoreRows[Math.min(2, scoreRows.length - 1)] || 1})`]];
+  sheet.getRange(`C${summary + 10}`).formulas = [[`=${valueCountFormula}`]];
+  sheet.getRange(`A${summary + 11}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 10}>=C${summary + 25},"${config.gateMet}","${config.gateNotMet}"))`]];
+  sheet.getRange(`C${summary + 14}`).formulas = [[`=IF(A${summary + 7}="","—",IF(A${summary + 7}="Competency met","Yes","No"))`]];
+  sheet.getRange(`C${summary + 16}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 10}>=C${summary + 25},"Eligible","Not yet"))`]];
+  sheet.getRange(`C${summary + 25}`).values = [[valueGate]];
+}
+
+function writePitchSummaryContent(sheet, summary, context) {
+  const { config, scoreRows, unscoredFormula, valueCountFormula, valueGate, valueTopicCount } = context;
+  sheet.getRange(`A${summary}:E${summary + 34}`).clear({ applyTo: "contents" });
+  sheet.getRange(`A${summary}`).values = [["TOTAL SCORE"]];
+  sheet.getRange(`C${summary}`).formulas = [[`=SUM(${scoreRows.map((scoreRow) => `B${scoreRow}`).join(",") || "0"})`]];
+  sheet.getRange(`C${summary}`).format.numberFormat = '0.0" / 100"';
+  sheet.getRange(`A${summary + 2}`).values = [["SCORE SUMMARY - reference signals for your verdict"]];
+  sheet.getRange(`A${summary + 3}`).values = [["Unscored subtopics remaining"]];
+  sheet.getRange(`C${summary + 3}`).formulas = [[`=${unscoredFormula}`]];
+  sheet.getRange(`A${summary + 4}`).values = [["Discovery & qualification signal (flagship)"]];
+  sheet.getRange(`C${summary + 4}`).formulas = [[`=IF(C${summary + 3}>0,"—",B${scoreRows[0] || 1})`]];
+  sheet.getRange(`A${summary + 6}`).values = [["EVALUATOR-RATED SIGNALS (your judgment - rate both before the verdict)"]];
+  sheet.getRange(`A${summary + 7}`).values = [["Was the presentation compelling?"]];
+  sheet.getRange(`C${summary + 7}`).values = [[""]];
+  sheet.getRange(`A${summary + 8}`).values = [["1 Would seek alternative vendors · 2 Doubts about the solution · 3 Likely to continue with Fortinet · 4 Unlikely to consider other vendors · 5 Will move forward with Fortinet"]];
+  sheet.getRange(`A${summary + 9}`).values = [["Was the presentation accurate?"]];
+  sheet.getRange(`C${summary + 9}`).values = [[""]];
+  sheet.getRange(`A${summary + 10}`).values = [["1 Misrepresented the product · 2 Accurate but FAB unclear · 3 Accurate; FAB satisfactorily conveyed · 4 Accurate; FAB insightful and robust"]];
+  sheet.getRange(`A${summary + 12}`).values = [["LAYER 1 - COMPETENCY (validator's judgment - use the signals above and pick one)"]];
+  sheet.getRange(`A${summary + 13}`).values = [[""]];
+  sheet.getRange(`A${summary + 15}`).values = [[config.layer2Header]];
+  sheet.getRange(`A${summary + 16}`).values = [[`${config.valueCountLabel} (of ${valueTopicCount})`]];
+  sheet.getRange(`C${summary + 16}`).formulas = [[`=${valueCountFormula}`]];
+  sheet.getRange(`A${summary + 17}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 16}>=C${summary + 33},"${config.gateMet}","${config.gateNotMet}"))`]];
+  sheet.getRange(`A${summary + 19}`).values = [["VALIDATOR DECISIONS"]];
+  sheet.getRange(`A${summary + 20}`).values = [["Passing grade (follows your verdict)"]];
+  sheet.getRange(`C${summary + 20}`).formulas = [[`=IF(A${summary + 13}="","—",IF(A${summary + 13}="Competency met","Yes","No"))`]];
+  sheet.getRange(`A${summary + 21}`).values = [["If objections or tough questions arose - handled gracefully?"]];
+  sheet.getRange(`A${summary + 22}`).values = [["Correlated customer needs to additional Fortinet products?"]];
+  sheet.getRange(`A${summary + 23}`).values = [["Eligible to grade others on this pitch? (automatic)"]];
+  sheet.getRange(`C${summary + 23}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 16}>=C${summary + 33},"Eligible","Not yet"))`]];
+  sheet.getRange(`A${summary + 24}`).values = [["Role granted (only if the presenter volunteered)"]];
+  sheet.getRange(`A${summary + 26}`).values = [["QUALITATIVE FEEDBACK"]];
+  sheet.getRange(`A${summary + 27}`).values = [[config.feedbackLiked]];
+  sheet.getRange(`A${summary + 28}`).values = [["Things that need more attention"]];
+  sheet.getRange(`A${summary + 29}`).values = [["Additional feedback"]];
+  sheet.getRange(`A${summary + 32}`).values = [["TEMPLATE SETTINGS - for adapting; leave alone while grading"]];
+  sheet.getRange(`A${summary + 33}`).values = [[config.settingsLabel]];
+  sheet.getRange(`C${summary + 33}`).values = [[valueGate]];
 }
 
 async function createWorkbook(rubric) {
@@ -225,7 +433,8 @@ async function applyExportPackageFixes(bytes) {
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
-async function createTemplateWorkbook(rubric) {
+async function createTemplateWorkbook(rubric, track = "demo") {
+  const config = trackConfigs[track] || trackConfigs.demo;
   const totalWeight = (rubric.topics || []).reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
   if (totalWeight > 100) throw new Error("Topic weights cannot exceed 100%.");
 
@@ -258,12 +467,13 @@ async function createTemplateWorkbook(rubric) {
     const start = row;
     for (const item of subtopics) {
       const subtopic = typeof item === "string" ? { name: item } : item;
+      const subtopicName = subtopic.name || "Evidence item";
       sheet.getRange(`A${row}:E${row}`).copyFrom(source.getRange("A25:E25"), "all");
-      sheet.getRange(`A${row}:E${row}`).format.rowHeight = 16.5;
-      sheet.getRange(`A${row}`).values = [[subtopic.name || "Evidence item"]];
+      sheet.getRange(`A${row}:E${row}`).format.rowHeight = subtopicRowHeight(subtopicName);
+      sheet.getRange(`A${row}`).values = [[subtopicName]];
       sheet.getRange(`B${row}`).values = [[""]];
-      sheet.getRange(`C${row}`).formulas = [[`=IF($B${row}="Shown + value",100,IF($B${row}="Shown: independent",75,IF($B${row}="Shown: prompted",50,IF($B${row}="Mentioned",25,IF($B${row}="Not shown",0,"")))))`]];
-      sheet.getRange(`B${row}`).dataValidation = { rule: { type: "list", values: levels } };
+      sheet.getRange(`C${row}`).formulas = [[levelFormula(row, config)]];
+      sheet.getRange(`B${row}`).dataValidation = { rule: { type: "list", values: config.levels } };
       subtopicRows.push(row);
       row += 1;
     }
@@ -273,43 +483,67 @@ async function createTemplateWorkbook(rubric) {
     sheet.getRange(`A${row}:E${row}`).format.rowHeight = 18;
     sheet.getRange(`A${row}`).values = [[`▸ Topic ${index + 1} score (average x weight)`]];
     sheet.getRange(`B${row}`).formulas = [[`=IFERROR(AVERAGE(C${start}:C${end})*${weight}/100,0)`]];
+    sheet.getRange(`B${row}`).format.numberFormat = `0.0" / ${weight}"`;
     sheet.getRange(`D${row}`).values = [["Notes:"]];
     scoreRows.push(row);
-    valueCountFormulas.push(`COUNTIF(C${start}:C${end},100)`);
+    if (!(config.excludeFinalTopicFromGate && index === (rubric.topics || []).length - 1)) {
+      valueCountFormulas.push(`COUNTIF(C${start}:C${end},100)`);
+    }
     row += 1;
   }
 
   const summary = row + 1;
-  sheet.getRange(`A1:A${summary + 25}`).format.columnWidth = 44;
-  sheet.getRange(`B1:B${summary + 25}`).format.columnWidth = 17.1796875;
-  sheet.getRange(`C1:C${summary + 25}`).format.columnWidth = 16.08984375;
-  sheet.getRange(`D1:D${summary + 25}`).format.columnWidth = 18;
-  sheet.getRange(`E1:E${summary + 25}`).format.columnWidth = 44;
+  const summaryRows = track === "pitch" ? 34 : 25;
+  sheet.getRange(`A1:A${summary + summaryRows}`).format.columnWidth = 44;
+  sheet.getRange(`B1:B${summary + summaryRows}`).format.columnWidth = 17.1796875;
+  sheet.getRange(`C1:C${summary + summaryRows}`).format.columnWidth = 16.08984375;
+  sheet.getRange(`D1:D${summary + summaryRows}`).format.columnWidth = 18;
+  sheet.getRange(`E1:E${summary + summaryRows}`).format.columnWidth = 44;
   sheet.getRange(`A${summary}:E${summary + 25}`).copyFrom(source.getRange("A61:E86"), "all");
   [21.75, 9, 19.5, 15, 15, 9, 19.5, 24, 9, 19.5, 15, 21.75, 9, 19.5, 15, 15, 15, 15, 9, 19.5, 39.75, 39.75, 39.75, 9, 19.5, 15].forEach((height, index) => {
     sheet.getRange(`A${summary + index}:E${summary + index}`).format.rowHeight = height;
   });
-  [2, 6, 7, 9, 11, 13, 19, 24].forEach((offset) => sheet.getRange(`A${summary + offset}:E${summary + offset}`).merge());
-  [3, 4, 10, 14, 15, 16, 20, 21, 22, 25].forEach((offset) => {
+  if (track === "pitch") {
+    [24, 15, 15, 15, 15, 9, 19.5, 15, 15, 15, 15, 9, 19.5, 24, 9, 19.5, 15, 24, 9, 19.5, 15, 15, 15, 15, 15, 9, 19.5, 39.75, 39.75, 39.75, 9, 19.5, 15, 15, 15].forEach((height, index) => {
+      sheet.getRange(`A${summary + index}:E${summary + index}`).format.rowHeight = height;
+    });
+  }
+  const fullWidthMergeOffsets = track === "pitch" ? [2, 6, 8, 10, 12, 13, 15, 17, 19, 26, 32] : [2, 6, 7, 9, 11, 13, 19, 24];
+  fullWidthMergeOffsets.forEach((offset) => sheet.getRange(`A${summary + offset}:E${summary + offset}`).merge());
+  const splitMergeOffsets = track === "pitch"
+    ? [3, 4, 7, 9, 16, 20, 21, 22, 23, 24, 27, 28, 29, 33]
+    : [3, 4, 10, 14, 15, 16, 20, 21, 22, 25];
+  splitMergeOffsets.forEach((offset) => {
     sheet.getRange(`A${summary + offset}:B${summary + offset}`).merge();
     sheet.getRange(`C${summary + offset}:E${summary + offset}`).merge();
   });
-  const scoreRefs = scoreRows.map((scoreRow) => `B${scoreRow}`).join(",") || "0";
   const unscoredFormula = unscoredRanges.map((range) => `COUNTBLANK(${range})`).join("+") || "0";
-  sheet.getRange(`C${summary}`).formulas = [[`=SUM(${scoreRefs})`]];
-  sheet.getRange(`C${summary + 3}`).formulas = [[`=${unscoredFormula}`]];
-  sheet.getRange(`C${summary + 4}`).formulas = [[`=IF(C${summary + 3}>0,"—",B${scoreRows[Math.min(2, scoreRows.length - 1)] || 1})`]];
-  sheet.getRange(`C${summary + 10}`).formulas = [[`=${valueCountFormulas.join("+") || "0"}`]];
-  sheet.getRange(`A${summary + 11}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 10}>=C${summary + 25},"Value gate MET - strong pass; eligible for nomination","Value gate NOT met - value-tying is the development area; not yet endorsed"))`]];
-  sheet.getRange(`C${summary + 14}`).formulas = [[`=IF(A${summary + 7}="","—",IF(A${summary + 7}="Competency met","Yes","No"))`]];
-  sheet.getRange(`C${summary + 16}`).formulas = [[`=IF(C${summary + 3}>0,"—",IF(C${summary + 10}>=C${summary + 25},"Eligible","Not yet"))`]];
-  sheet.getRange(`C${summary + 25}`).values = [[Number(rubric.valueGate) || 0]];
-  sheet.getRange(`A${summary + 7}`).dataValidation = { rule: { type: "list", values: ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"] } };
-  sheet.getRange(`C${summary + 15}`).dataValidation = { rule: { type: "list", values: ["", "Yes", "No", "N/A - none occurred"] } };
-  sheet.getRange(`C${summary + 17}`).dataValidation = { rule: { type: "list", values: ["", "-", "Validator", "Mentor"] } };
-  sheet.getRange(`A1:E${summary + 25}`).format.font = workbookFont;
-  applyHeaderSpec(sheet, rubric);
-  [
+  const valueCountFormula = valueCountFormulas.join("+") || "0";
+  const summaryContext = {
+    config,
+    scoreRows,
+    unscoredFormula,
+    valueCountFormula,
+    valueGate: Number(rubric.valueGate) || 0,
+    valueTopicCount: config.excludeFinalTopicFromGate ? Math.max(0, (rubric.topics || []).length - 1) : (rubric.topics || []).length,
+  };
+  if (track === "pitch") writePitchSummaryContent(sheet, summary, summaryContext);
+  else writeDemoSummaryContent(sheet, summary, summaryContext);
+  sheet.getRange(`A1:E${summary + summaryRows}`).format.font = workbookFont;
+  applyHeaderSpec(sheet, rubric, config);
+  const sectionHeaderRanges = track === "pitch" ? [
+    "A7:E7",
+    "A13:E13",
+    "A22:E22",
+    `A${summary}:E${summary}`,
+    `A${summary + 2}:E${summary + 2}`,
+    `A${summary + 6}:E${summary + 6}`,
+    `A${summary + 12}:E${summary + 12}`,
+    `A${summary + 15}:E${summary + 15}`,
+    `A${summary + 19}:E${summary + 19}`,
+    `A${summary + 26}:E${summary + 26}`,
+    `A${summary + 32}:E${summary + 32}`,
+  ] : [
     "A7:E7",
     "A13:E13",
     "A22:E22",
@@ -320,14 +554,33 @@ async function createTemplateWorkbook(rubric) {
     `A${summary + 13}:E${summary + 13}`,
     `A${summary + 19}:E${summary + 19}`,
     `A${summary + 24}:E${summary + 24}`,
-  ].forEach((range) => applySectionHeaderStyle(sheet, range));
+  ];
+  sectionHeaderRanges.forEach((range) => applySectionHeaderStyle(sheet, range));
   applyCellBorders(sheet, "A8:E11");
-  applyScoringLegendStyle(sheet);
+  applyScoringLegendStyle(sheet, config);
   applyScoringTableHeader(sheet, 23);
   topicBandRows.forEach((topicRow) => applyTopicBandStyle(sheet, topicRow));
   subtopicRows.forEach((subtopicRow) => applySubtopicRowStyle(sheet, subtopicRow));
   scoreRows.forEach((scoreRow) => applyTopicScoreRowStyle(sheet, scoreRow));
-  applySummaryBlockStyle(sheet, summary);
+  if (track === "pitch") applyPitchSummaryBlockStyle(sheet, summary);
+  else applySummaryBlockStyle(sheet, summary);
+
+  const demoVerdictOptions = ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"];
+  const pitchVerdictOptions = ["", "Competency met", "Targeted re-validation - name the topic in notes", "Full re-validation (after coaching)"];
+  const yesNoOptions = ["", "Yes", "No", "N/A"];
+  const roleOptions = ["", "-", "Validator", "Mentor"];
+  if (track === "pitch") {
+    sheet.getRange(`C${summary + 7}`).dataValidation = { rule: { type: "list", values: ["", "1 - Would seek alternative vendors", "2 - Doubts about the solution", "3 - Likely to continue with Fortinet", "4 - Unlikely to consider other vendors", "5 - Will move forward with Fortinet"] } };
+    sheet.getRange(`C${summary + 9}`).dataValidation = { rule: { type: "list", values: ["", "1 - Misrepresented the product", "2 - Accurate but FAB unclear", "3 - Accurate; FAB satisfactorily conveyed", "4 - Accurate; FAB insightful and robust"] } };
+    sheet.getRange(`A${summary + 13}`).dataValidation = { rule: { type: "list", values: pitchVerdictOptions } };
+    sheet.getRange(`C${summary + 21}`).dataValidation = { rule: { type: "list", values: yesNoOptions } };
+    sheet.getRange(`C${summary + 22}`).dataValidation = { rule: { type: "list", values: yesNoOptions } };
+    sheet.getRange(`C${summary + 24}`).dataValidation = { rule: { type: "list", values: roleOptions } };
+  } else {
+    sheet.getRange(`A${summary + 7}`).dataValidation = { rule: { type: "list", values: demoVerdictOptions } };
+    sheet.getRange(`C${summary + 15}`).dataValidation = { rule: { type: "list", values: yesNoOptions } };
+    sheet.getRange(`C${summary + 17}`).dataValidation = { rule: { type: "list", values: roleOptions } };
+  }
 
   const adaptation = workbook.worksheets.add("How to adapt");
   adaptation.getRange("A1:A26").format.columnWidth = 4;
@@ -355,7 +608,7 @@ async function createExactTemplateWorkbook(rubric) {
   const topics = rubric.topics || [];
   if (topics.length > slots.length) throw new Error("The source template supports up to 7 topics.");
 
-  applyHeaderSpec(sheet, rubric);
+  applyHeaderSpec(sheet, rubric, trackConfigs.demo);
   sheet.getRange("C86").values = [[Number(rubric.valueGate) || 0]];
   [
     "A7:E7",
@@ -424,7 +677,8 @@ createServer(async (request, response) => {
     const rubric = request.headers["content-type"]?.includes("application/x-www-form-urlencoded")
       ? JSON.parse(new URLSearchParams(body).get("rubric") || "{}")
       : JSON.parse(body);
-    const workbook = await createTemplateWorkbook(rubric);
+    const track = trackConfigs[rubric.track] ? rubric.track : "demo";
+    const workbook = await createTemplateWorkbook(rubric, track);
     const output = await SpreadsheetFile.exportXlsx(workbook);
     const exportDir = await mkdtemp(path.join(tmpdir(), "rubric-builder-"));
     const exportPath = path.join(exportDir, "rubric.xlsx");

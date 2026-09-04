@@ -2,7 +2,7 @@ if (window.location.protocol === "file:") {
   window.location.replace("http://127.0.0.1:4173/");
 }
 
-const storageKey = "rubric-builder-v1";
+const storageKey = "rubric-builder-v3";
 
 const sample = {
   name: "Demo Validation Rubric",
@@ -18,19 +18,91 @@ const sample = {
   ]
 };
 
-let rubric = load();
+const samples = {
+  demo: sample,
+  pitch: {
+    name: "Pitch Validation Rubric",
+    valueGate: 5,
+    topics: [
+      { name: "Discovery & qualification", weight: 20, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown", "[Rename] subtopic 4 - what must be shown"] },
+      { name: "Features, advantages & benefits", weight: 20, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown", "[Rename] subtopic 4 - what must be shown"] },
+      { name: "Common use cases & buyers", weight: 15, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown"] },
+      { name: "Competitive positioning", weight: 15, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown"] },
+      { name: "Licensing & packaging", weight: 10, subtopics: ["[Rename] subtopic 1 - what must be shown", "[Rename] subtopic 2 - what must be shown", "[Rename] subtopic 3 - what must be shown"] },
+      { name: "Delivery & pacing", weight: 20, subtopics: ["Conversation balance - dialogue over monologue; invites and uses interaction", "Pacing & time discipline - tight and energetic; earns its minutes", "Structure & close - clear arc, punchy close, a natural next step"] }
+    ]
+  },
+  poc: {
+    name: "POC Validation Rubric",
+    valueGate: 3,
+    topics: [
+      { name: "Scenario fit", weight: 25, subtopics: ["Confirm the success criteria", "Match the scenario to user needs"] },
+      { name: "Execution", weight: 25, subtopics: ["Complete the core workflow", "Handle expected edge cases"] },
+      { name: "Validation", weight: 25, subtopics: ["Tie results to the success criteria", "Capture customer confirmation"] },
+      { name: "Handoff readiness", weight: 25, subtopics: ["Summarize outcomes", "Identify next steps"] }
+    ]
+  }
+};
+
+const trackMeta = {
+  demo: { label: "Demo", exportReady: true, gateLabel: "Value-tied topics required", note: "" },
+  pitch: { label: "Pitch", exportReady: true, gateLabel: "Tailoring gate minimum", note: "" },
+  poc: { label: "POC", exportReady: false, gateLabel: "Validation gate minimum", note: "POC layout pending." },
+};
+
+let state = load();
+let activeTrack = state.activeTrack;
+let rubric = state.rubrics[activeTrack];
 const topicsElement = document.querySelector("#topics");
 const nameInput = document.querySelector("#rubric-name");
 const gateInput = document.querySelector("#value-gate");
+const gateLabel = document.querySelector("label[for='value-gate'] span") || document.querySelector(".setup-card label:nth-child(2) span");
+const trackNote = document.querySelector("#track-note");
+const trackTabs = Array.from(document.querySelectorAll(".track-tab"));
 
 function load() {
-  try { return JSON.parse(localStorage.getItem(storageKey)) || structuredClone(sample); }
-  catch { return structuredClone(sample); }
+  const fallback = { activeTrack: "demo", rubrics: structuredClone(samples) };
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey));
+    if (stored?.rubrics) return normalizeState(stored);
+    const v2 = JSON.parse(localStorage.getItem("rubric-builder-v2"));
+    if (v2?.rubrics) {
+      fallback.activeTrack = v2.activeTrack === "poc" ? "demo" : (v2.activeTrack || "demo");
+      fallback.rubrics.demo = v2.rubrics.demo || fallback.rubrics.demo;
+      return normalizeState(fallback);
+    }
+    const legacy = JSON.parse(localStorage.getItem("rubric-builder-v1"));
+    if (legacy?.topics) fallback.rubrics.demo = legacy;
+    return normalizeState(fallback);
+  } catch {
+    return normalizeState(fallback);
+  }
 }
-function save() { localStorage.setItem(storageKey, JSON.stringify(rubric)); }
+
+function normalizeState(rawState) {
+  const next = {
+    activeTrack: trackMeta[rawState.activeTrack] ? rawState.activeTrack : "demo",
+    rubrics: structuredClone(samples),
+  };
+  Object.keys(samples).forEach((track) => {
+    if (rawState.rubrics?.[track]) next.rubrics[track] = rawState.rubrics[track];
+  });
+  return next;
+}
+
+function save() {
+  state.activeTrack = activeTrack;
+  state.rubrics[activeTrack] = rubric;
+  localStorage.setItem(storageKey, JSON.stringify(state));
+}
 function topicDefaults() { return { name: "New topic", weight: 0, subtopics: ["What must be demonstrated"] }; }
 
 function render() {
+  const meta = trackMeta[activeTrack];
+  trackTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.track === activeTrack));
+  gateLabel.textContent = meta.gateLabel;
+  trackNote.hidden = !meta.note;
+  trackNote.textContent = meta.note;
   nameInput.value = rubric.name;
   gateInput.value = rubric.valueGate;
   topicsElement.innerHTML = "";
@@ -103,6 +175,7 @@ function updateWeightStatus() {
   weightStatus.classList.toggle("invalid", weightTotal !== 100);
   document.querySelector("#side-weight-total").textContent = weightTotal;
   const overLimit = weightTotal > 100;
+  const exportReady = trackMeta[activeTrack].exportReady;
   const sideOrb = document.querySelector(".weight-orb");
   const sideMessage = document.querySelector("#side-weight-message");
   sideOrb.classList.toggle("over-limit", overLimit);
@@ -112,7 +185,7 @@ function updateWeightStatus() {
     : weightTotal === 100
     ? "Perfect. Every topic is contributing to a complete 100-point rubric."
     : `Your topics total ${weightTotal}%. Adjust them by ${Math.abs(100 - weightTotal)}% to balance the rubric.`;
-  document.querySelector("#export-button").disabled = overLimit;
+  document.querySelector("#export-button").disabled = overLimit || !exportReady;
   document.querySelector("#topic-count").textContent = rubric.topics.length;
   document.querySelector("#subtopic-count").textContent = rubric.topics.reduce((total, topic) => total + topic.subtopics.length, 0);
   document.querySelector("#side-value-gate").textContent = `${rubric.valueGate} ${rubric.valueGate === 1 ? "topic" : "topics"}`;
@@ -121,12 +194,24 @@ function updateWeightStatus() {
 nameInput.addEventListener("input", (event) => { rubric.name = event.target.value; save(); });
 gateInput.addEventListener("input", (event) => { rubric.valueGate = Math.max(0, Number(event.target.value) || 0); updateWeightStatus(); save(); });
 document.querySelector("#add-topic-button").addEventListener("click", () => { rubric.topics.push(topicDefaults()); render(); });
-document.querySelector("#reset-button").addEventListener("click", () => { rubric = structuredClone(sample); render(); });
+document.querySelector("#reset-button").addEventListener("click", () => { rubric = structuredClone(samples[activeTrack]); render(); });
+trackTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    save();
+    activeTrack = tab.dataset.track;
+    rubric = state.rubrics[activeTrack];
+    render();
+  });
+});
 document.querySelector("#export-button").addEventListener("click", () => {
+  if (!trackMeta[activeTrack].exportReady) {
+    alert(`${trackMeta[activeTrack].label} export will be enabled after its layout is added.`);
+    return;
+  }
   fetch("/api/export", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(rubric),
+    body: JSON.stringify({ ...rubric, track: activeTrack }),
   })
     .then(async (response) => {
       if (!response.ok) {
