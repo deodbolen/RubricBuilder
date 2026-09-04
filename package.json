@@ -1,0 +1,18 @@
+{
+  "name": "rubric-builder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local rubric builder with Excel export.",
+  "scripts": {
+    "start": "node server.mjs",
+    "launch": "node scripts/start-local.mjs"
+  },
+  "dependencies": {
+    "@oai/artifact-tool": "2.8.59",
+    "jszip": "^3.10.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
