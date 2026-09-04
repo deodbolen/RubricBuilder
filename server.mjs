@@ -1538,7 +1538,6 @@ createServer(async (request, response) => {
     });
     response.end(bytes);
   } catch (error) {
-    console.error(error);
     const status = [
       "Topic weights cannot exceed 100%.",
       "Topic weights must total exactly 100%.",
