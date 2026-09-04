@@ -447,7 +447,7 @@ function applyPocHeader(sheet, rubric, config) {
     range.format.font = { ...workbookFont, size: 10, bold: true };
     range.format.borders = { preset: "all", style: "thin", color: formBorder };
   });
-  ["B4", "D4", "B5", "D5", "B6"].forEach((address) => {
+  ["B4", "D4:E4", "B5", "D5:E5", "B6:E6"].forEach((address) => {
     const range = sheet.getRange(address);
     range.format.fill = formInputFill;
     range.format.font = workbookFont;
