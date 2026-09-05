@@ -63,7 +63,7 @@ const trackNote = document.querySelector("#track-note");
 const trackTabs = Array.from(document.querySelectorAll(".track-tab"));
 
 function load() {
-  const fallback = { activeTrack: "demo", rubrics: structuredClone(samples) };
+  const fallback = { activeTrack: "pitch", rubrics: structuredClone(samples) };
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey));
     if (stored?.rubrics) return normalizeState(stored);
@@ -92,7 +92,7 @@ function load() {
 
 function normalizeState(rawState) {
   const next = {
-    activeTrack: trackMeta[rawState.activeTrack] ? rawState.activeTrack : "demo",
+    activeTrack: trackMeta[rawState.activeTrack] ? rawState.activeTrack : "pitch",
     rubrics: structuredClone(samples),
   };
   Object.keys(samples).forEach((track) => {
