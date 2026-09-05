@@ -1382,15 +1382,23 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   borderRange(ws, `A${summary}:E${settingsRow + 1}`);
   return {
     layer1Input: `A${layer1Input}`,
+    layer1Range: `A${layer1Input}:E${layer1Input}`,
     unscoredCell: `C${summary + 3}`,
+    unscoredRange: `C${summary + 3}:E${summary + 3}`,
     flagshipCell: `C${summary + 4}`,
+    flagshipRange: `C${summary + 4}:E${summary + 4}`,
     gateCell: `A${gateRow}`,
+    gateRange: `A${gateRow}:E${gateRow}`,
     passingCell: `C${decisionsRow + 1}`,
+    passingRange: `C${decisionsRow + 1}:E${decisionsRow + 1}`,
     roleCell: `C${decisionsRow + decisionLabels.length}`,
     eligibleCell: `C${decisionsRow + decisionLabels.findIndex((label) => label.includes("(automatic)")) + 1}`,
+    eligibleRange: `C${decisionsRow + decisionLabels.findIndex((label) => label.includes("(automatic)")) + 1}:E${decisionsRow + decisionLabels.findIndex((label) => label.includes("(automatic)")) + 1}`,
     curveballCell: `C${decisionsRow + 2}`,
     pitchCompellingCell: isPitch ? `C${summary + 7}` : null,
+    pitchCompellingRange: isPitch ? `C${summary + 7}:E${summary + 7}` : null,
     pitchAccurateCell: isPitch ? `C${summary + 9}` : null,
+    pitchAccurateRange: isPitch ? `C${summary + 9}:E${summary + 9}` : null,
     feedbackRange: `C${feedbackRow + 1}:E${feedbackRow + 3}`,
     settingsCell: `C${settingsRow + 1}`,
     maxRow: settingsRow + 1,
@@ -1406,40 +1414,40 @@ function cfStyle(fill, color) {
 }
 
 function applySpecConditionalFormatting(ws, cells) {
-  applyStatusFormat(ws, cells.unscoredCell, [
+  applyStatusFormat(ws, cells.unscoredRange, [
     { type: "cellIs", priority: 1, operator: "greaterThan", formulae: ["0"], style: cfStyle("#FFCDD2", "B71C1C") },
     { type: "cellIs", priority: 2, operator: "equal", formulae: ["0"], style: cfStyle("#C8E6C9", "1B5E20") },
   ]);
-  applyStatusFormat(ws, cells.flagshipCell, [
+  applyStatusFormat(ws, cells.flagshipRange, [
     { type: "expression", priority: 3, formulae: [`AND(ISNUMBER(${cells.flagshipCell}),${cells.flagshipCell}>=60)`], style: cfStyle("#C8E6C9", "1B5E20") },
     { type: "expression", priority: 4, formulae: [`AND(ISNUMBER(${cells.flagshipCell}),${cells.flagshipCell}<60)`], style: cfStyle("#FFCDD2", "B71C1C") },
   ]);
-  applyStatusFormat(ws, cells.layer1Input, [
+  applyStatusFormat(ws, cells.layer1Range, [
     { type: "expression", priority: 5, formulae: [`${cells.layer1Input}="Competency met"`], style: cfStyle("#C8E6C9", "1B5E20") },
     { type: "expression", priority: 6, formulae: [`ISNUMBER(SEARCH("Targeted",${cells.layer1Input}))`], style: cfStyle("#FFE0B2", "7A4F01") },
     { type: "expression", priority: 7, formulae: [`ISNUMBER(SEARCH("Full",${cells.layer1Input}))`], style: cfStyle("#FFCDD2", "B71C1C") },
   ]);
-  applyStatusFormat(ws, cells.gateCell, [
+  applyStatusFormat(ws, cells.gateRange, [
     { type: "expression", priority: 8, formulae: [`AND(ISNUMBER(SEARCH("MET",${cells.gateCell})),NOT(ISNUMBER(SEARCH("NOT met",${cells.gateCell}))))`], style: cfStyle("#C8E6C9", "1B5E20") },
     { type: "expression", priority: 9, formulae: [`ISNUMBER(SEARCH("NOT met",${cells.gateCell}))`], style: cfStyle("#FFE0B2", "7A4F01") },
   ]);
-  applyStatusFormat(ws, cells.passingCell, [
+  applyStatusFormat(ws, cells.passingRange, [
     { type: "expression", priority: 10, formulae: [`${cells.passingCell}="Yes"`], style: cfStyle("#C8E6C9", "1B5E20") },
     { type: "expression", priority: 11, formulae: [`${cells.passingCell}="No"`], style: cfStyle("#FFCDD2", "B71C1C") },
   ]);
-  applyStatusFormat(ws, cells.eligibleCell, [
+  applyStatusFormat(ws, cells.eligibleRange, [
     { type: "expression", priority: 12, formulae: [`${cells.eligibleCell}="Eligible"`], style: cfStyle("#C8E6C9", "1B5E20") },
     { type: "expression", priority: 13, formulae: [`${cells.eligibleCell}="Not yet"`], style: cfStyle("#FFE0B2", "7A4F01") },
   ]);
   if (cells.pitchCompellingCell) {
-    applyStatusFormat(ws, cells.pitchCompellingCell, [
+    applyStatusFormat(ws, cells.pitchCompellingRange, [
       { type: "expression", priority: 14, formulae: [`OR(LEFT(${cells.pitchCompellingCell},1)="4",LEFT(${cells.pitchCompellingCell},1)="5")`], style: cfStyle("#C8E6C9", "1B5E20") },
       { type: "expression", priority: 15, formulae: [`LEFT(${cells.pitchCompellingCell},1)="3"`], style: cfStyle("#FFE0B2", "7A4F01") },
       { type: "expression", priority: 16, formulae: [`OR(LEFT(${cells.pitchCompellingCell},1)="1",LEFT(${cells.pitchCompellingCell},1)="2")`], style: cfStyle("#FFCDD2", "B71C1C") },
     ]);
   }
   if (cells.pitchAccurateCell) {
-    applyStatusFormat(ws, cells.pitchAccurateCell, [
+    applyStatusFormat(ws, cells.pitchAccurateRange, [
       { type: "expression", priority: 17, formulae: [`OR(LEFT(${cells.pitchAccurateCell},1)="3",LEFT(${cells.pitchAccurateCell},1)="4")`], style: cfStyle("#C8E6C9", "1B5E20") },
       { type: "expression", priority: 18, formulae: [`LEFT(${cells.pitchAccurateCell},1)="2"`], style: cfStyle("#FFE0B2", "7A4F01") },
       { type: "expression", priority: 19, formulae: [`LEFT(${cells.pitchAccurateCell},1)="1"`], style: cfStyle("#FFCDD2", "B71C1C") },
