@@ -972,7 +972,8 @@ const thinGray = { style: "thin", color: { argb: "FFB7B7B7" } };
 const darkGray = { style: "thin", color: { argb: "FF666666" } };
 
 function colorFill(hex) {
-  return { type: "pattern", pattern: "solid", fgColor: { argb: `FF${hex.replace("#", "")}` } };
+  const argb = `FF${hex.replace("#", "")}`;
+  return { type: "pattern", pattern: "solid", fgColor: { argb }, bgColor: { argb } };
 }
 
 function font(color = "000000", options = {}) {
@@ -1413,44 +1414,57 @@ function cfStyle(fill, color) {
   return { fill: colorFill(fill), font: { color: { argb: `FF${color}` }, bold: true } };
 }
 
+function absoluteCell(ref) {
+  return ref.replace(/^([A-Z]+)(\d+)$/, "$$$1$$$2");
+}
+
 function applySpecConditionalFormatting(ws, cells) {
+  const unscored = absoluteCell(cells.unscoredCell);
+  const flagship = absoluteCell(cells.flagshipCell);
+  const layer1 = absoluteCell(cells.layer1Input);
+  const gate = absoluteCell(cells.gateCell);
+  const passing = absoluteCell(cells.passingCell);
+  const eligible = absoluteCell(cells.eligibleCell);
+  const compelling = cells.pitchCompellingCell ? absoluteCell(cells.pitchCompellingCell) : null;
+  const accurate = cells.pitchAccurateCell ? absoluteCell(cells.pitchAccurateCell) : null;
+
   applyStatusFormat(ws, cells.unscoredRange, [
-    { type: "cellIs", priority: 1, operator: "greaterThan", formulae: ["0"], style: cfStyle("#FFCDD2", "B71C1C") },
-    { type: "cellIs", priority: 2, operator: "equal", formulae: ["0"], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 1, formulae: [`${unscored}>0`], style: cfStyle("#FFCDD2", "B71C1C") },
+    { type: "expression", priority: 2, formulae: [`${unscored}=0`], style: cfStyle("#C8E6C9", "1B5E20") },
   ]);
   applyStatusFormat(ws, cells.flagshipRange, [
-    { type: "expression", priority: 3, formulae: [`AND(ISNUMBER(${cells.flagshipCell}),${cells.flagshipCell}>=60)`], style: cfStyle("#C8E6C9", "1B5E20") },
-    { type: "expression", priority: 4, formulae: [`AND(ISNUMBER(${cells.flagshipCell}),${cells.flagshipCell}<60)`], style: cfStyle("#FFCDD2", "B71C1C") },
+    { type: "expression", priority: 3, formulae: [`AND(ISNUMBER(${flagship}),${flagship}>=60)`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 4, formulae: [`AND(ISNUMBER(${flagship}),${flagship}<60)`], style: cfStyle("#FFCDD2", "B71C1C") },
   ]);
   applyStatusFormat(ws, cells.layer1Range, [
-    { type: "expression", priority: 5, formulae: [`${cells.layer1Input}="Competency met"`], style: cfStyle("#C8E6C9", "1B5E20") },
-    { type: "expression", priority: 6, formulae: [`ISNUMBER(SEARCH("Targeted",${cells.layer1Input}))`], style: cfStyle("#FFE0B2", "7A4F01") },
-    { type: "expression", priority: 7, formulae: [`ISNUMBER(SEARCH("Full",${cells.layer1Input}))`], style: cfStyle("#FFCDD2", "B71C1C") },
+    { type: "expression", priority: 5, formulae: [`${layer1}="Competency met"`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 6, formulae: [`ISNUMBER(SEARCH("Targeted",${layer1}))`], style: cfStyle("#FFE0B2", "7A4F01") },
+    { type: "expression", priority: 7, formulae: [`ISNUMBER(SEARCH("Full",${layer1}))`], style: cfStyle("#FFCDD2", "B71C1C") },
   ]);
   applyStatusFormat(ws, cells.gateRange, [
-    { type: "expression", priority: 8, formulae: [`AND(ISNUMBER(SEARCH("MET",${cells.gateCell})),NOT(ISNUMBER(SEARCH("NOT met",${cells.gateCell}))))`], style: cfStyle("#C8E6C9", "1B5E20") },
-    { type: "expression", priority: 9, formulae: [`ISNUMBER(SEARCH("NOT met",${cells.gateCell}))`], style: cfStyle("#FFE0B2", "7A4F01") },
+    { type: "expression", priority: 8, formulae: [`AND(ISNUMBER(SEARCH("MET",${gate})),NOT(ISNUMBER(SEARCH("NOT met",${gate}))))`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 9, formulae: [`ISNUMBER(SEARCH("NOT met",${gate}))`], style: cfStyle("#FFE0B2", "7A4F01") },
   ]);
   applyStatusFormat(ws, cells.passingRange, [
-    { type: "expression", priority: 10, formulae: [`${cells.passingCell}="Yes"`], style: cfStyle("#C8E6C9", "1B5E20") },
-    { type: "expression", priority: 11, formulae: [`${cells.passingCell}="No"`], style: cfStyle("#FFCDD2", "B71C1C") },
+    { type: "expression", priority: 10, formulae: [`${passing}="Yes"`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 11, formulae: [`${passing}="No"`], style: cfStyle("#FFCDD2", "B71C1C") },
   ]);
   applyStatusFormat(ws, cells.eligibleRange, [
-    { type: "expression", priority: 12, formulae: [`${cells.eligibleCell}="Eligible"`], style: cfStyle("#C8E6C9", "1B5E20") },
-    { type: "expression", priority: 13, formulae: [`${cells.eligibleCell}="Not yet"`], style: cfStyle("#FFE0B2", "7A4F01") },
+    { type: "expression", priority: 12, formulae: [`${eligible}="Eligible"`], style: cfStyle("#C8E6C9", "1B5E20") },
+    { type: "expression", priority: 13, formulae: [`${eligible}="Not yet"`], style: cfStyle("#FFE0B2", "7A4F01") },
   ]);
   if (cells.pitchCompellingCell) {
     applyStatusFormat(ws, cells.pitchCompellingRange, [
-      { type: "expression", priority: 14, formulae: [`OR(LEFT(${cells.pitchCompellingCell},1)="4",LEFT(${cells.pitchCompellingCell},1)="5")`], style: cfStyle("#C8E6C9", "1B5E20") },
-      { type: "expression", priority: 15, formulae: [`LEFT(${cells.pitchCompellingCell},1)="3"`], style: cfStyle("#FFE0B2", "7A4F01") },
-      { type: "expression", priority: 16, formulae: [`OR(LEFT(${cells.pitchCompellingCell},1)="1",LEFT(${cells.pitchCompellingCell},1)="2")`], style: cfStyle("#FFCDD2", "B71C1C") },
+      { type: "expression", priority: 14, formulae: [`OR(LEFT(${compelling},1)="4",LEFT(${compelling},1)="5")`], style: cfStyle("#C8E6C9", "1B5E20") },
+      { type: "expression", priority: 15, formulae: [`LEFT(${compelling},1)="3"`], style: cfStyle("#FFE0B2", "7A4F01") },
+      { type: "expression", priority: 16, formulae: [`OR(LEFT(${compelling},1)="1",LEFT(${compelling},1)="2")`], style: cfStyle("#FFCDD2", "B71C1C") },
     ]);
   }
   if (cells.pitchAccurateCell) {
     applyStatusFormat(ws, cells.pitchAccurateRange, [
-      { type: "expression", priority: 17, formulae: [`OR(LEFT(${cells.pitchAccurateCell},1)="3",LEFT(${cells.pitchAccurateCell},1)="4")`], style: cfStyle("#C8E6C9", "1B5E20") },
-      { type: "expression", priority: 18, formulae: [`LEFT(${cells.pitchAccurateCell},1)="2"`], style: cfStyle("#FFE0B2", "7A4F01") },
-      { type: "expression", priority: 19, formulae: [`LEFT(${cells.pitchAccurateCell},1)="1"`], style: cfStyle("#FFCDD2", "B71C1C") },
+      { type: "expression", priority: 17, formulae: [`OR(LEFT(${accurate},1)="3",LEFT(${accurate},1)="4")`], style: cfStyle("#C8E6C9", "1B5E20") },
+      { type: "expression", priority: 18, formulae: [`LEFT(${accurate},1)="2"`], style: cfStyle("#FFE0B2", "7A4F01") },
+      { type: "expression", priority: 19, formulae: [`LEFT(${accurate},1)="1"`], style: cfStyle("#FFCDD2", "B71C1C") },
     ]);
   }
 }
