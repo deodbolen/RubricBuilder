@@ -1030,6 +1030,12 @@ function sectionHeader(ws, address, text) {
   });
 }
 
+function spacerRow(ws, row) {
+  ws.mergeCells(`A${row}:E${row}`);
+  ws.getRow(row).height = 9;
+  borderRange(ws, `A${row}:E${row}`);
+}
+
 function listFormula(listSheet, name, values) {
   const column = listSheet.actualColumnCount + 1;
   values.forEach((value, index) => {
@@ -1305,6 +1311,8 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   styleRange(ws, `A${summary + 3}:B${summary + 4}`, { fill: colorFill(formLabelFill), font: font("#000000", { bold: true }) });
   ws.getCell(`A${summary + 4}`).font = font("#FF0000", { bold: true });
   borderRange(ws, `A${summary + 3}:E${summary + 4}`);
+  spacerRow(ws, summary + 1);
+  spacerRow(ws, summary + 5);
 
   const layer1Row = isPitch ? summary + 12 : summary + 6;
   const layer1Input = layer1Row + 1;
@@ -1322,7 +1330,11 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
       styleRange(ws, `C${summary + offset}:E${summary + offset}`, { fill: colorFill(formInputFill), alignment: { horizontal: "center" } });
       borderRange(ws, `A${summary + offset}:E${summary + offset}`);
     });
+    spacerRow(ws, summary + 8);
+    spacerRow(ws, summary + 10);
+    spacerRow(ws, summary + 11);
   }
+  spacerRow(ws, layer1Input + 1);
 
   const layer2Row = isPitch ? summary + 15 : summary + 9;
   const countRow = layer2Row + 1;
@@ -1339,6 +1351,7 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   ws.getCell(`A${gateRow}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=$C$${settingsValueRow(summary, track)},"${config.gateMet}","${config.gateNotMet}"))` };
   ws.getCell(`A${gateRow}`).alignment = { horizontal: "center" };
   borderRange(ws, `A${countRow}:E${gateRow}`);
+  spacerRow(ws, gateRow + 1);
 
   const decisionsRow = isPitch ? summary + 19 : summary + 13;
   sectionHeader(ws, `A${decisionsRow}:E${decisionsRow}`, "VALIDATOR DECISIONS");
@@ -1361,6 +1374,7 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
     });
     borderRange(ws, `A${row}:E${row}`);
   });
+  spacerRow(ws, decisionsRow + decisionLabels.length + 1);
 
   const feedbackRow = isPitch ? summary + 26 : summary + 19;
   sectionHeader(ws, `A${feedbackRow}:E${feedbackRow}`, "QUALITATIVE FEEDBACK");
@@ -1374,6 +1388,8 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
     ws.getRow(row).height = 39.75;
     borderRange(ws, `A${row}:E${row}`);
   });
+  spacerRow(ws, feedbackRow + 4);
+  if (isPitch) spacerRow(ws, feedbackRow + 5);
 
   const settingsRow = isPitch ? summary + 32 : summary + 24;
   sectionHeader(ws, `A${settingsRow}:E${settingsRow}`, isPoc ? "TEMPLATE SETTINGS - for adapting; hide after adapting" : "TEMPLATE SETTINGS - for adapting; leave alone while grading");
