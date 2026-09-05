@@ -1279,19 +1279,31 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
     alignment: { vertical: "middle" },
     border: { top: thinGray, left: thinGray, bottom: thinGray, right: thinGray },
   });
+  ws.mergeCells(`A${summary}:B${summary}`);
+  ws.mergeCells(`C${summary}:E${summary}`);
   ws.getCell(`A${summary}`).value = "TOTAL SCORE";
   ws.getCell(`C${summary}`).value = { formula: scoreRows.map((row) => `B${row}`).join("+") || "0" };
   ws.getCell(`C${summary}`).numFmt = '0.0" / 100"';
+  ws.getCell(`C${summary}`).alignment = { horizontal: "left", vertical: "middle" };
 
   sectionHeader(ws, `A${summary + 2}:E${summary + 2}`, "SCORE SUMMARY - reference signals for your verdict");
+  ws.mergeCells(`A${summary + 3}:B${summary + 3}`);
+  ws.mergeCells(`C${summary + 3}:E${summary + 3}`);
   ws.getCell(`A${summary + 3}`).value = "Unscored subtopics remaining";
   ws.getCell(`C${summary + 3}`).value = { formula: unscoredFormula };
+  ws.getCell(`C${summary + 3}`).alignment = { horizontal: "center" };
+  ws.mergeCells(`A${summary + 4}:B${summary + 4}`);
+  ws.mergeCells(`C${summary + 4}:E${summary + 4}`);
   ws.getCell(`A${summary + 4}`).value = isPitch ? "Discovery & qualification signal (flagship)" : isPoc ? "Flagship topic signal (floor 60%)" : "[Flagship topic] signal (optional - repoint or delete)";
   const flagshipRange = flagshipIndex >= 0 ? subtopicPercentRanges[flagshipIndex] : subtopicPercentRanges[0];
   ws.getCell(`C${summary + 4}`).value = flagshipRange
     ? { formula: `IF(C${summary + 3}>0,"—",IFERROR(AVERAGE(${flagshipRange}),0))` }
     : "—";
   ws.getCell(`C${summary + 4}`).numFmt = '0"%"';
+  ws.getCell(`C${summary + 4}`).alignment = { horizontal: "center" };
+  styleRange(ws, `A${summary + 3}:B${summary + 4}`, { fill: colorFill(formLabelFill), font: font("#000000", { bold: true }) });
+  ws.getCell(`A${summary + 4}`).font = font("#FF0000", { bold: true });
+  borderRange(ws, `A${summary + 3}:E${summary + 4}`);
 
   const layer1Row = isPitch ? summary + 12 : summary + 6;
   const layer1Input = layer1Row + 1;
@@ -1312,10 +1324,17 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   const countRow = layer2Row + 1;
   const gateRow = layer2Row + 2;
   sectionHeader(ws, `A${layer2Row}:E${layer2Row}`, config.layer2Header);
+  ws.mergeCells(`A${countRow}:B${countRow}`);
+  ws.mergeCells(`C${countRow}:E${countRow}`);
   ws.getCell(`A${countRow}`).value = `${config.valueCountLabel}${isPitch || isPoc ? ` (of ${valueTopicCount})` : ""}`;
   ws.getCell(`C${countRow}`).value = { formula: valueCountFormula };
+  ws.getCell(`A${countRow}`).fill = colorFill(formLabelFill);
+  ws.getCell(`A${countRow}`).font = font("#000000", { bold: true });
+  ws.getCell(`C${countRow}`).alignment = { horizontal: "center" };
   ws.mergeCells(`A${gateRow}:E${gateRow}`);
   ws.getCell(`A${gateRow}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=$C$${settingsValueRow(summary, track)},"${config.gateMet}","${config.gateNotMet}"))` };
+  ws.getCell(`A${gateRow}`).alignment = { horizontal: "center" };
+  borderRange(ws, `A${countRow}:E${gateRow}`);
 
   const decisionsRow = isPitch ? summary + 19 : summary + 13;
   sectionHeader(ws, `A${decisionsRow}:E${decisionsRow}`, "VALIDATOR DECISIONS");
@@ -1326,13 +1345,16 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
       : ["Passing grade", "Did the presenter handle a curveball globally?", "Is the presenter eligible to grade others on this product? (automatic)", "Role granted (only if the presenter volunteered)"];
   decisionLabels.forEach((label, index) => {
     const row = decisionsRow + 1 + index;
-    ws.getCell(`A${row}`).value = label;
-    ws.getCell(`A${row}`).fill = colorFill(formLabelFill);
-    ws.getCell(`A${row}`).font = font("#000000", { bold: true });
+    ws.mergeCells(`A${row}:B${row}`);
     ws.mergeCells(`C${row}:E${row}`);
+    ws.getCell(`A${row}`).value = label;
+    styleRange(ws, `A${row}:B${row}`, { fill: colorFill(formLabelFill), font: font("#000000", { bold: true }) });
     if (index === 0) ws.getCell(`C${row}`).value = { formula: `IF(A${layer1Input}="","—",IF(A${layer1Input}="Competency met","Yes","No"))` };
     if (label.includes("(automatic)")) ws.getCell(`C${row}`).value = { formula: `IF(C${summary + 3}>0,"—",IF(C${countRow}>=$C$${settingsValueRow(summary, track)},"Eligible","Not yet"))` };
-    ws.getCell(`C${row}`).fill = colorFill(index === 0 || label.includes("(automatic)") ? "#FFFFFF" : formInputFill);
+    styleRange(ws, `C${row}:E${row}`, {
+      fill: colorFill(index === 0 || label.includes("(automatic)") ? "#FFFFFF" : formInputFill),
+      alignment: { horizontal: index === 0 || label.includes("(automatic)") ? "center" : "left" },
+    });
     borderRange(ws, `A${row}:E${row}`);
   });
 
@@ -1340,10 +1362,10 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   sectionHeader(ws, `A${feedbackRow}:E${feedbackRow}`, "QUALITATIVE FEEDBACK");
   [config.feedbackLiked, "Things that need more attention", "Additional feedback"].forEach((label, index) => {
     const row = feedbackRow + 1 + index;
-    ws.getCell(`A${row}`).value = label;
-    ws.getCell(`A${row}`).fill = colorFill(formLabelFill);
-    ws.getCell(`A${row}`).font = font("#000000", { bold: true });
+    ws.mergeCells(`A${row}:B${row}`);
     ws.mergeCells(`C${row}:E${row}`);
+    ws.getCell(`A${row}`).value = label;
+    styleRange(ws, `A${row}:B${row}`, { fill: colorFill(formLabelFill), font: font("#000000", { bold: true }) });
     styleRange(ws, `C${row}:E${row}`, { fill: colorFill(formInputFill) });
     ws.getRow(row).height = 39.75;
     borderRange(ws, `A${row}:E${row}`);
@@ -1351,10 +1373,11 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
 
   const settingsRow = isPitch ? summary + 32 : summary + 24;
   sectionHeader(ws, `A${settingsRow}:E${settingsRow}`, isPoc ? "TEMPLATE SETTINGS - for adapting; hide after adapting" : "TEMPLATE SETTINGS - for adapting; leave alone while grading");
+  ws.mergeCells(`A${settingsRow + 1}:B${settingsRow + 1}`);
   ws.getCell(`A${settingsRow + 1}`).value = config.settingsLabel;
-  ws.getCell(`A${settingsRow + 1}`).fill = colorFill(formLabelFill);
-  ws.getCell(`A${settingsRow + 1}`).font = font("#000000", { bold: true });
+  styleRange(ws, `A${settingsRow + 1}:B${settingsRow + 1}`, { fill: colorFill(formLabelFill), font: font("#000000", { bold: true }) });
   ws.getCell(`C${settingsRow + 1}`).value = valueGate;
+  ws.getCell(`C${settingsRow + 1}`).alignment = { horizontal: "center" };
   borderRange(ws, `A${settingsRow + 1}:C${settingsRow + 1}`);
   borderRange(ws, `A${summary}:E${settingsRow + 1}`);
   return {
