@@ -1315,8 +1315,11 @@ function writePublicSummary(ws, summary, track, config, context, lists) {
   if (isPitch) {
     sectionHeader(ws, `A${summary + 6}:E${summary + 6}`, "EVALUATOR-RATED SIGNALS (your judgment - rate both before the verdict)");
     [["Was the presentation compelling?", lists.compelling, 7], ["Was the presentation accurate?", lists.accurate, 9]].forEach(([label, list, offset]) => {
+      ws.mergeCells(`A${summary + offset}:B${summary + offset}`);
+      ws.mergeCells(`C${summary + offset}:E${summary + offset}`);
       ws.getCell(`A${summary + offset}`).value = label;
-      ws.getCell(`C${summary + offset}`).fill = colorFill(formInputFill);
+      styleRange(ws, `A${summary + offset}:B${summary + offset}`, { fill: colorFill(formLabelFill), font: font("#000000", { bold: true }) });
+      styleRange(ws, `C${summary + offset}:E${summary + offset}`, { fill: colorFill(formInputFill), alignment: { horizontal: "center" } });
       borderRange(ws, `A${summary + offset}:E${summary + offset}`);
     });
   }
