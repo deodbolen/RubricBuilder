@@ -10,6 +10,13 @@ Download the project, unzip it, then double-click the starter for your computer:
 - Windows: `Start Windows.bat`
 - Linux: `Start Linux.sh`
 
+On Linux, the starter may not run from a double-click until it is marked executable. If that happens, open a terminal in the project folder and run:
+
+```bash
+chmod 755 "Start Linux.sh"
+./"Start Linux.sh"
+```
+
 The starter will:
 
 - Check that Node.js is available.
