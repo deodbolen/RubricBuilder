@@ -1126,8 +1126,6 @@ function exportTopicsForTrack(topics, track) {
 function validateRubric(topics) {
   const totalWeight = topics.reduce((total, topic) => total + (Number(topic.weight) || 0), 0);
   if (totalWeight !== 100) throw new Error("Topic weights must total exactly 100%.");
-  const zeroWeight = topics.findIndex((topic) => (Number(topic.weight) || 0) <= 0);
-  if (zeroWeight >= 0) throw new Error(`Topic ${zeroWeight + 1} needs a weight greater than 0%.`);
   const emptyTopic = topics.findIndex((topic) => !(topic.subtopics || []).length);
   if (emptyTopic >= 0) throw new Error(`Topic ${emptyTopic + 1} needs at least one subtopic.`);
 }
@@ -1605,7 +1603,6 @@ createServer(async (request, response) => {
     const status = [
       "Topic weights cannot exceed 100%.",
       "Topic weights must total exactly 100%.",
-      "needs a weight greater than 0%",
       "needs at least one subtopic",
     ].some((message) => error.message.includes(message)) ? 400 : 500;
     response.writeHead(status, { "Content-Type": "application/json" });
